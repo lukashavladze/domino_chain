@@ -7,7 +7,7 @@ public class DominoGrid : MonoBehaviour
     public int width = 10;
     public int height = 10;
 
-    public float spacing = 0.25f;
+    public float spacing = 0.15f;
 
     void Start()
     {
@@ -21,9 +21,9 @@ public class DominoGrid : MonoBehaviour
             for (int x = 0; x < width; x++)
             {
                 Vector3 pos = new Vector3(
-    (x - width / 2f) * spacing,
-    0.25f,
-    (y - height / 2f) * spacing);
+                    (x - width / 2f) * spacing,
+                    0.25f,
+                    (y - height / 2f) * spacing);
 
                 GameObject domino =
                     Instantiate(
@@ -32,19 +32,27 @@ public class DominoGrid : MonoBehaviour
                         Quaternion.identity,
                         transform);
 
-                DominoPixel pixel =
-                    domino.GetComponent<DominoPixel>();
+                Domino d = domino.GetComponent<Domino>();
 
-                if (
-                    (x == 3 && y == 8) ||
-                    (x == 4 && y == 8) ||
-                    (x == 6 && y == 8) ||
-                    (x == 7 && y == 8)
-                   )
-                {
-                    pixel.IsHeartPixel = true;
-                }
+                Color pixelColor = GetHeartPixel(x, y);
+
+                d.SetColor(pixelColor);
             }
         }
+    }
+
+    Color GetHeartPixel(int x, int y)
+    {
+        if (
+            x >= 2 &&
+            x <= 7 &&
+            y >= 2 &&
+            y <= 7
+           )
+        {
+            return Color.red;
+        }
+
+        return Color.white;
     }
 }

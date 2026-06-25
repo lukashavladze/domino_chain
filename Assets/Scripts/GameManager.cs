@@ -2,14 +2,12 @@ using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
-    private Rigidbody[] dominoes;
+    public Rigidbody[] dominoes;
 
     bool started;
 
     public void StartChain()
     {
-        dominoes = FindObjectsOfType<Rigidbody>();
-
         started = true;
 
         foreach (Rigidbody rb in dominoes)
@@ -17,9 +15,12 @@ public class GameManager : MonoBehaviour
             rb.isKinematic = false;
         }
 
-        dominoes[0].AddTorque(
-            Vector3.forward * 10f,
+        dominoes[0].AddForce(
+            Vector3.right * 5f,
             ForceMode.Impulse);
+        //dominoes[0].AddTorque(
+        //Vector3.forward * -10f,
+        //ForceMode.Impulse);
     }
 
     void Update()
