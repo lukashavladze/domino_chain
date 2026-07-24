@@ -41,6 +41,8 @@ public class Domino : MonoBehaviour
         if (hasStarted)
             return;
 
+        Debug.Log("Fall: " + name);
+
         hasStarted = true;
 
         rb.isKinematic = false;

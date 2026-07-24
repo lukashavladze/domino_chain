@@ -3,18 +3,29 @@ using UnityEngine.InputSystem;
 
 public class GameManager : MonoBehaviour
 {
-    public DominoLine line;
+    DominoLine[] lines;
+
+    void Awake()
+    {
+        lines = FindObjectsByType<DominoLine>(FindObjectsSortMode.None);
+    }
 
     void Update()
     {
         if (Keyboard.current.spaceKey.wasPressedThisFrame)
         {
-            line.StartLine();
+            foreach (DominoLine line in lines)
+            {
+                line.StartLine();
+            }
         }
 
         if (Keyboard.current.rKey.wasPressedThisFrame)
         {
-            line.ResetLine();
+            foreach (DominoLine line in lines)
+            {
+                line.ResetLine();
+            }
         }
     }
 }
