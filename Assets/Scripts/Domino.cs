@@ -14,6 +14,10 @@ public class Domino : MonoBehaviour
     public float pushForce = 2f;
     public float nextDelay = 0.08f;
 
+    [Header("Reveal")]
+    public LayerMask coverLayer;
+    public float revealRadius = 0.18f;
+
     Rigidbody rb;
 
     bool hasStarted;
@@ -23,6 +27,14 @@ public class Domino : MonoBehaviour
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
+    }
+
+    void Update()
+    {
+        if (!hasStarted)
+            return;
+
+        RevealCover();
     }
 
     public void ResetDomino()
@@ -76,6 +88,26 @@ public class Domino : MonoBehaviour
                 (domino.transform.position - transform.position).normalized;
 
             domino.Fall(dir);
+        }
+    }
+
+    void RevealCover()
+    {
+        Collider[] hits =
+            Physics.OverlapSphere(
+                transform.position,
+                revealRadius,
+                coverLayer);
+
+        foreach (Collider hit in hits)
+        {
+            CoverTile tile =
+                hit.GetComponent<CoverTile>();
+
+            if (tile != null)
+            {
+                tile.Reveal();
+            }
         }
     }
 }
