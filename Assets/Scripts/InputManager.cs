@@ -12,13 +12,31 @@ public class InputManager : MonoBehaviour
 
     void Update()
     {
-        if (Mouse.current == null)
+        if (cam == null)
             return;
 
-        if (!Mouse.current.leftButton.wasPressedThisFrame)
-            return;
+        // Mouse
+        if (Mouse.current != null &&
+            Mouse.current.leftButton.wasPressedThisFrame)
+        {
+            TryHit(Mouse.current.position.ReadValue());
+        }
 
-        Ray ray = cam.ScreenPointToRay(Mouse.current.position.ReadValue());
+        // Touch
+        if (Touchscreen.current != null)
+        {
+            var touch = Touchscreen.current.primaryTouch;
+
+            if (touch.press.wasPressedThisFrame)
+            {
+                TryHit(touch.position.ReadValue());
+            }
+        }
+    }
+
+    void TryHit(Vector2 screenPosition)
+    {
+        Ray ray = cam.ScreenPointToRay(screenPosition);
 
         if (!Physics.Raycast(ray, out RaycastHit hit))
             return;
@@ -31,6 +49,11 @@ public class InputManager : MonoBehaviour
         if (!domino.canStartChain)
             return;
 
-        domino.Fall(domino.transform.forward);
+        domino.StartChain();
+
+        //Vector3 direction =
+        //    domino.transform.forward;
+
+        //domino.Fall(direction);
     }
 }

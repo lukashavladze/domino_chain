@@ -52,6 +52,20 @@ public class Domino : MonoBehaviour
         Invoke(nameof(TriggerNext), nextDelay);
     }
 
+    public void StartChain()
+    {
+        if (hasStarted)
+            return;
+
+        if (nextDomino == null)
+            return;
+
+        Vector3 dir =
+            (nextDomino.transform.position - transform.position).normalized;
+
+        Fall(dir);
+    }
+
     void TriggerNext()
     {
         if (nextDomino == null)

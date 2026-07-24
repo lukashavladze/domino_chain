@@ -12,15 +12,8 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
-        if (Keyboard.current.spaceKey.wasPressedThisFrame)
-        {
-            foreach (DominoLine line in lines)
-            {
-                line.StartLine();
-            }
-        }
-
-        if (Keyboard.current.rKey.wasPressedThisFrame)
+        if (Keyboard.current != null &&
+            Keyboard.current.rKey.wasPressedThisFrame)
         {
             foreach (DominoLine line in lines)
             {
