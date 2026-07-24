@@ -1,50 +1,20 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class GameManager : MonoBehaviour
 {
-    public Rigidbody[] dominoes;
-
-    bool started;
-
-    public void StartChain()
-    {
-        started = true;
-
-        foreach (Rigidbody rb in dominoes)
-        {
-            rb.isKinematic = false;
-        }
-
-        dominoes[0].AddForce(
-            Vector3.right * 5f,
-            ForceMode.Impulse);
-        //dominoes[0].AddTorque(
-        //Vector3.forward * -10f,
-        //ForceMode.Impulse);
-    }
+    public DominoLine line;
 
     void Update()
     {
-        if (!started)
-            return;
-
-        bool allFallen = true;
-
-        foreach (Rigidbody rb in dominoes)
+        if (Keyboard.current.spaceKey.wasPressedThisFrame)
         {
-            Domino domino = rb.GetComponent<Domino>();
-
-            if (!domino.HasFallen)
-            {
-                allFallen = false;
-                break;
-            }
+            line.StartLine();
         }
 
-        if (allFallen)
+        if (Keyboard.current.rKey.wasPressedThisFrame)
         {
-            Debug.Log("LEVEL COMPLETE");
-            started = false;
+            line.ResetLine();
         }
     }
 }

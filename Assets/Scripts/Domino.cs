@@ -1,29 +1,63 @@
 using UnityEngine;
 
+[RequireComponent(typeof(Rigidbody))]
 public class Domino : MonoBehaviour
 {
-    public bool HasFallen;
+    [Header("Connections")]
+    public Domino nextDomino;
 
-    private Renderer topRenderer;
+    [Header("Gameplay")]
+    public bool canStartChain;
 
-    private void Start()
+    [Header("Settings")]
+    public float pushForce = 2f;
+    public float nextDelay = 0.08f;
+
+    Rigidbody rb;
+
+    bool hasStarted;
+
+    public bool HasStarted => hasStarted;
+
+    void Awake()
     {
-        //topRenderer = transform.Find("TopFace").GetComponent<Renderer>();
+        rb = GetComponent<Rigidbody>();
     }
 
-    private void Update()
+    public void ResetDomino()
     {
-        if (!HasFallen && transform.up.y < 0.7f)
-        {
-            HasFallen = true;
-        }
+        hasStarted = false;
+
+        rb.isKinematic = true;
+
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+
+        transform.localRotation = Quaternion.identity;
     }
 
-    public void SetColor(Color color)
+    public void Fall(Vector3 direction)
     {
-        if (topRenderer != null)
-        {
-            topRenderer.material.color = color;
-        }
+        if (hasStarted)
+            return;
+
+        hasStarted = true;
+
+        rb.isKinematic = false;
+
+        rb.AddForce(direction * pushForce, ForceMode.Impulse);
+
+        Invoke(nameof(TriggerNext), nextDelay);
+    }
+
+    void TriggerNext()
+    {
+        if (nextDomino == null)
+            return;
+
+        Vector3 dir =
+            (nextDomino.transform.position - transform.position).normalized;
+
+        nextDomino.Fall(dir);
     }
 }
