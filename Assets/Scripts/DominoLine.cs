@@ -16,9 +16,7 @@ public class DominoLine : MonoBehaviour
             Domino domino = child.GetComponent<Domino>();
 
             if (domino != null)
-            {
                 dominoes.Add(domino);
-            }
         }
 
         if (dominoes.Count == 0)
@@ -35,10 +33,10 @@ public class DominoLine : MonoBehaviour
 
             domino.canStartChain = (i == 0);
 
+            domino.nextDominoes.Clear();
+
             if (i < dominoes.Count - 1)
-                domino.nextDomino = dominoes[i + 1];
-            else
-                domino.nextDomino = null;
+                domino.nextDominoes.Add(dominoes[i + 1]);
         }
 
         Debug.Log("Auto Connected " + dominoes.Count + " dominoes.");

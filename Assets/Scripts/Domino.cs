@@ -1,10 +1,11 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody))]
 public class Domino : MonoBehaviour
 {
     [Header("Connections")]
-    public Domino nextDomino;
+    public List<Domino> nextDominoes = new();
 
     [Header("Gameplay")]
     public bool canStartChain;
@@ -41,13 +42,11 @@ public class Domino : MonoBehaviour
         if (hasStarted)
             return;
 
-        Debug.Log("Fall: " + name);
-
         hasStarted = true;
 
         rb.isKinematic = false;
 
-        rb.AddForce(direction * pushForce, ForceMode.Impulse);
+        rb.AddForce(direction.normalized * pushForce, ForceMode.Impulse);
 
         Invoke(nameof(TriggerNext), nextDelay);
     }
@@ -57,23 +56,26 @@ public class Domino : MonoBehaviour
         if (hasStarted)
             return;
 
-        if (nextDomino == null)
+        if (nextDominoes.Count == 0)
             return;
 
         Vector3 dir =
-            (nextDomino.transform.position - transform.position).normalized;
+            (nextDominoes[0].transform.position - transform.position).normalized;
 
         Fall(dir);
     }
 
     void TriggerNext()
     {
-        if (nextDomino == null)
-            return;
+        foreach (Domino domino in nextDominoes)
+        {
+            if (domino == null)
+                continue;
 
-        Vector3 dir =
-            (nextDomino.transform.position - transform.position).normalized;
+            Vector3 dir =
+                (domino.transform.position - transform.position).normalized;
 
-        nextDomino.Fall(dir);
+            domino.Fall(dir);
+        }
     }
 }
