@@ -160,4 +160,4 @@ MonoBehaviour:
   coverLayer:
     serializedVersion: 2
     m_Bits: 64
-  revealRadius: 0.18
+  revealRadius: 0.5

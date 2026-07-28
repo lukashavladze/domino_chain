@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -18,15 +19,23 @@ public class Domino : MonoBehaviour
     public LayerMask coverLayer;
     public float revealRadius = 0.18f;
 
+    [Header("Cleanup")]
+    public float waitBeforeFade = 0.5f;
+    public float fadeDuration = 0.3f;
+
     Rigidbody rb;
 
     bool hasStarted;
+    bool destroyScheduled;
+
+    Vector3 originalScale;
 
     public bool HasStarted => hasStarted;
 
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
+        originalScale = transform.localScale;
     }
 
     void Update()
@@ -37,16 +46,43 @@ public class Domino : MonoBehaviour
         RevealCover();
     }
 
+    IEnumerator FadeAndDestroy()
+    {
+        yield return new WaitForSeconds(1f);   // Time to let the domino fall
+
+        Vector3 startScale = transform.localScale;
+        Vector3 startPos = transform.position;
+
+        float t = 0f;
+
+        while (t < fadeDuration)
+        {
+            t += Time.deltaTime;
+
+            float p = t / fadeDuration;
+
+            transform.localScale = Vector3.Lerp(startScale, Vector3.zero, p);
+            transform.position = Vector3.Lerp(startPos, startPos + Vector3.down * 0.1f, p);
+
+            yield return null;
+        }
+
+        Destroy(gameObject);
+    }
+
     public void ResetDomino()
     {
+        StopAllCoroutines();
+
         hasStarted = false;
+        destroyScheduled = false;
 
         rb.isKinematic = true;
-
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
 
         transform.localRotation = Quaternion.identity;
+        transform.localScale = originalScale;
     }
 
     public void Fall(Vector3 direction)
@@ -59,6 +95,12 @@ public class Domino : MonoBehaviour
         rb.isKinematic = false;
 
         rb.AddForce(direction.normalized * pushForce, ForceMode.Impulse);
+
+        if (!destroyScheduled)
+        {
+            destroyScheduled = true;
+            StartCoroutine(FadeAndDestroy());
+        }
 
         Invoke(nameof(TriggerNext), nextDelay);
     }
@@ -101,8 +143,7 @@ public class Domino : MonoBehaviour
 
         foreach (Collider hit in hits)
         {
-            CoverTile tile =
-                hit.GetComponent<CoverTile>();
+            CoverTile tile = hit.GetComponent<CoverTile>();
 
             if (tile != null)
             {
