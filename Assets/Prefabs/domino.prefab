@@ -157,7 +157,6 @@ MonoBehaviour:
   canStartChain: 0
   pushForce: 2
   nextDelay: 0.1
-  coverLayer:
-    serializedVersion: 2
-    m_Bits: 64
-  revealRadius: 0.5
+  coverTile: {fileID: 5710730907931097213, guid: cb50c90f6d4e46748b6123c6ac4b95cc, type: 3}
+  waitBeforeFade: 0.5
+  fadeDuration: 0.3
