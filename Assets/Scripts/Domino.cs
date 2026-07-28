@@ -16,8 +16,7 @@ public class Domino : MonoBehaviour
     public float nextDelay = 0.08f;
 
     [Header("Reveal")]
-    public LayerMask coverLayer;
-    public float revealRadius = 0.18f;
+    public CoverTile coverTile;
 
     [Header("Cleanup")]
     public float waitBeforeFade = 0.5f;
@@ -135,20 +134,9 @@ public class Domino : MonoBehaviour
 
     void RevealCover()
     {
-        Collider[] hits =
-            Physics.OverlapSphere(
-                transform.position,
-                revealRadius,
-                coverLayer);
-
-        foreach (Collider hit in hits)
+        if (coverTile != null)
         {
-            CoverTile tile = hit.GetComponent<CoverTile>();
-
-            if (tile != null)
-            {
-                tile.Reveal();
-            }
+            coverTile.Reveal();
         }
     }
 }
