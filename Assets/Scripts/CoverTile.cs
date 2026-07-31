@@ -1,16 +1,16 @@
-using UnityEngine;
+//using UnityEngine;
 
-public class CoverTile : MonoBehaviour
-{
-    bool revealed;
+//public class CoverTile : MonoBehaviour
+//{
+//    bool revealed;
 
-    public void Reveal()
-    {
-        if (revealed)
-            return;
+//    public void Reveal()
+//    {
+//        if (revealed)
+//            return;
 
-        revealed = true;
+//        revealed = true;
 
-        gameObject.SetActive(false);
-    }
-}
+//        gameObject.SetActive(false);
+//    }
+//}

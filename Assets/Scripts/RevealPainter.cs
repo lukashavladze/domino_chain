@@ -2,55 +2,87 @@ using UnityEngine;
 
 public class RevealPainter : MonoBehaviour
 {
-    [Header("Reveal")]
-    public RenderTexture revealMask;
-    public Material brushMaterial;
+    public static RevealPainter Instance;
 
-    [Range(0.001f, 0.2f)]
+    [Header("Ground")]
+    public Renderer groundRenderer;
+
+    [Header("Brush")]
+    public Texture2D brushTexture;
+
+    [Range(0.01f, 0.2f)]
     public float brushSize = 0.05f;
 
-    Camera cam;
+    Texture2D maskTexture;
 
-    void Start()
+    void Awake()
     {
-        cam = Camera.main;
+        Instance = this;
 
-        // Clear the mask to black (everything hidden)
-        RenderTexture active = RenderTexture.active;
-        RenderTexture.active = revealMask;
-        GL.Clear(true, true, Color.black);
-        RenderTexture.active = active;
+        maskTexture = new Texture2D(1024, 1024, TextureFormat.R8, false, true);
+
+        Color32[] pixels = new Color32[1024 * 1024];
+
+        for (int i = 0; i < pixels.Length; i++)
+            pixels[i] = Color.black;
+
+        maskTexture.SetPixels32(pixels);
+        maskTexture.Apply();
+
+        groundRenderer.material.SetTexture("_RevealMask", maskTexture);
+        Debug.Log(groundRenderer.material.GetTexture("_RevealMask"));
     }
 
-    void Update()
+    public void Paint(Vector3 worldPosition)
     {
-        if (Input.GetMouseButton(0))
-        {
-            PaintAtMouse();
-        }
-    }
-
-    void PaintAtMouse()
-    {
-        Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+        Ray ray = new Ray(worldPosition + Vector3.up * 5f, Vector3.down);
 
         if (!Physics.Raycast(ray, out RaycastHit hit))
             return;
 
+        Renderer renderer = hit.collider.GetComponent<Renderer>();
+
+        if (renderer == null)
+            return;
+
         Vector2 uv = hit.textureCoord;
 
-        brushMaterial.SetVector("_Brush",
-            new Vector4(uv.x, uv.y, brushSize, 0));
+        StampBrush(uv);
+    }
 
-        RenderTexture temp = RenderTexture.GetTemporary(
-            revealMask.width,
-            revealMask.height,
-            0,
-            revealMask.format);
+    void StampBrush(Vector2 uv)
+    {
+        int centerX = Mathf.RoundToInt(uv.x * maskTexture.width);
+        int centerY = Mathf.RoundToInt(uv.y * maskTexture.height);
 
-        Graphics.Blit(revealMask, temp);
-        Graphics.Blit(temp, revealMask, brushMaterial);
+        int radius = Mathf.RoundToInt(maskTexture.width * brushSize);
 
-        RenderTexture.ReleaseTemporary(temp);
+        for (int y = -radius; y <= radius; y++)
+        {
+            for (int x = -radius; x <= radius; x++)
+            {
+                int px = centerX + x;
+                int py = centerY + y;
+
+                if (px < 0 || py < 0 || px >= maskTexture.width || py >= maskTexture.height)
+                    continue;
+
+                float u = (x + radius) / (float)(radius * 2);
+                float v = (y + radius) / (float)(radius * 2);
+
+                Color brush = brushTexture.GetPixelBilinear(u, v);
+
+                if (brush.r <= 0f)
+                    continue;
+
+                Color current = maskTexture.GetPixel(px, py);
+
+                if (brush.r > current.r)
+                    maskTexture.SetPixel(px, py, Color.white * brush.r);
+            }
+        }
+
+        maskTexture.Apply(false);
+        Debug.Log(maskTexture.GetPixel(centerX, centerY));
     }
 }

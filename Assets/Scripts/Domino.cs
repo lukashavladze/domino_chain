@@ -15,11 +15,7 @@ public class Domino : MonoBehaviour
     public float pushForce = 2f;
     public float nextDelay = 0.08f;
 
-    [Header("Reveal")]
-    public CoverTile coverTile;
-
     [Header("Cleanup")]
-    public float waitBeforeFade = 0.5f;
     public float fadeDuration = 0.3f;
 
     Rigidbody rb;
@@ -42,12 +38,16 @@ public class Domino : MonoBehaviour
         if (!hasStarted)
             return;
 
-        RevealCover();
+        // Paint while the domino is falling.
+        if (RevealPainter.Instance != null)
+        {
+            RevealPainter.Instance.Paint(transform.position);
+        }
     }
 
     IEnumerator FadeAndDestroy()
     {
-        yield return new WaitForSeconds(1f);   // Time to let the domino fall
+        yield return new WaitForSeconds(1f);
 
         Vector3 startScale = transform.localScale;
         Vector3 startPos = transform.position;
@@ -61,7 +61,10 @@ public class Domino : MonoBehaviour
             float p = t / fadeDuration;
 
             transform.localScale = Vector3.Lerp(startScale, Vector3.zero, p);
-            transform.position = Vector3.Lerp(startPos, startPos + Vector3.down * 0.1f, p);
+            transform.position = Vector3.Lerp(
+                startPos,
+                startPos + Vector3.down * 0.1f,
+                p);
 
             yield return null;
         }
@@ -129,14 +132,6 @@ public class Domino : MonoBehaviour
                 (domino.transform.position - transform.position).normalized;
 
             domino.Fall(dir);
-        }
-    }
-
-    void RevealCover()
-    {
-        if (coverTile != null)
-        {
-            coverTile.Reveal();
         }
     }
 }
