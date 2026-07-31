@@ -27,6 +27,12 @@ public class Domino : MonoBehaviour
 
     public bool HasStarted => hasStarted;
 
+    [Header("Reveal")]
+    [SerializeField] private float revealPaintDistance = 0.08f;
+
+    private Vector3 lastPaintPosition;
+    private bool hasPaintPosition;
+
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
@@ -38,10 +44,22 @@ public class Domino : MonoBehaviour
         if (!hasStarted)
             return;
 
-        // Paint while the domino is falling.
         if (RevealPainter.Instance != null)
         {
-            RevealPainter.Instance.Paint(transform.position);
+            float distanceMoved = hasPaintPosition
+                ? Vector3.Distance(
+                    transform.position,
+                    lastPaintPosition
+                )
+                : float.MaxValue;
+
+            if (distanceMoved >= revealPaintDistance)
+            {
+                RevealPainter.Instance.Paint(transform.position);
+
+                lastPaintPosition = transform.position;
+                hasPaintPosition = true;
+            }
         }
     }
 
@@ -76,6 +94,7 @@ public class Domino : MonoBehaviour
     {
         StopAllCoroutines();
 
+        hasPaintPosition = false;
         hasStarted = false;
         destroyScheduled = false;
 
@@ -93,6 +112,8 @@ public class Domino : MonoBehaviour
             return;
 
         hasStarted = true;
+
+        hasPaintPosition = false;
 
         rb.isKinematic = false;
 

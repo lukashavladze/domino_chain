@@ -2,87 +2,174 @@ using UnityEngine;
 
 public class RevealPainter : MonoBehaviour
 {
-    public static RevealPainter Instance;
+    public static RevealPainter Instance { get; private set; }
 
     [Header("Ground")]
-    public Renderer groundRenderer;
+    [SerializeField] private Renderer groundRenderer;
+    [SerializeField] private Collider groundCollider;
 
-    [Header("Brush")]
-    public Texture2D brushTexture;
+    [Header("GPU Brush")]
+    [SerializeField] private Material brushMaterial;
 
-    [Range(0.01f, 0.2f)]
-    public float brushSize = 0.05f;
+    [Range(0.005f, 0.2f)]
+    [SerializeField] private float brushSize = 0.035f;
 
-    Texture2D maskTexture;
+    [Range(0f, 1f)]
+    [SerializeField] private float brushSoftness = 0.2f;
 
-    void Awake()
+    [Header("Performance")]
+    [SerializeField] private int maskResolution = 512;
+
+    private RenderTexture revealMask;
+    private RenderTexture temporaryMask;
+
+    private static readonly int RevealMaskId =
+        Shader.PropertyToID("_RevealMask");
+
+    private static readonly int BrushPositionId =
+        Shader.PropertyToID("_BrushPosition");
+
+    private static readonly int BrushSizeId =
+        Shader.PropertyToID("_BrushSize");
+
+    private static readonly int BrushSoftnessId =
+        Shader.PropertyToID("_BrushSoftness");
+
+    private void Awake()
     {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
         Instance = this;
 
-        maskTexture = new Texture2D(1024, 1024, TextureFormat.R8, false, true);
+        CreateRenderTextures();
+        ClearMask();
 
-        Color32[] pixels = new Color32[1024 * 1024];
+        groundRenderer.material.SetTexture(
+            RevealMaskId,
+            revealMask
+        );
+    }
 
-        for (int i = 0; i < pixels.Length; i++)
-            pixels[i] = Color.black;
+    private void CreateRenderTextures()
+    {
+        revealMask = CreateMaskTexture("Reveal Mask");
+        temporaryMask = CreateMaskTexture("Temporary Reveal Mask");
+    }
 
-        maskTexture.SetPixels32(pixels);
-        maskTexture.Apply();
+    private RenderTexture CreateMaskTexture(string textureName)
+    {
+        RenderTexture texture = new RenderTexture(
+            maskResolution,
+            maskResolution,
+            0,
+            RenderTextureFormat.R8
+        );
 
-        groundRenderer.material.SetTexture("_RevealMask", maskTexture);
-        Debug.Log(groundRenderer.material.GetTexture("_RevealMask"));
+        texture.name = textureName;
+        texture.filterMode = FilterMode.Bilinear;
+        texture.wrapMode = TextureWrapMode.Clamp;
+        texture.useMipMap = false;
+        texture.autoGenerateMips = false;
+
+        texture.Create();
+
+        return texture;
+    }
+
+    private void ClearMask()
+    {
+        RenderTexture previous =
+            RenderTexture.active;
+
+        RenderTexture.active = revealMask;
+
+        GL.Clear(
+            true,
+            true,
+            Color.black
+        );
+
+        RenderTexture.active = previous;
     }
 
     public void Paint(Vector3 worldPosition)
     {
-        Ray ray = new Ray(worldPosition + Vector3.up * 5f, Vector3.down);
+        Vector3 rayOrigin =
+            worldPosition + Vector3.up * 2f;
 
-        if (!Physics.Raycast(ray, out RaycastHit hit))
-            return;
+        Ray ray = new Ray(
+            rayOrigin,
+            Vector3.down
+        );
 
-        Renderer renderer = hit.collider.GetComponent<Renderer>();
-
-        if (renderer == null)
-            return;
-
-        Vector2 uv = hit.textureCoord;
-
-        StampBrush(uv);
-    }
-
-    void StampBrush(Vector2 uv)
-    {
-        int centerX = Mathf.RoundToInt(uv.x * maskTexture.width);
-        int centerY = Mathf.RoundToInt(uv.y * maskTexture.height);
-
-        int radius = Mathf.RoundToInt(maskTexture.width * brushSize);
-
-        for (int y = -radius; y <= radius; y++)
+        if (!groundCollider.Raycast(
+                ray,
+                out RaycastHit hit,
+                5f))
         {
-            for (int x = -radius; x <= radius; x++)
-            {
-                int px = centerX + x;
-                int py = centerY + y;
-
-                if (px < 0 || py < 0 || px >= maskTexture.width || py >= maskTexture.height)
-                    continue;
-
-                float u = (x + radius) / (float)(radius * 2);
-                float v = (y + radius) / (float)(radius * 2);
-
-                Color brush = brushTexture.GetPixelBilinear(u, v);
-
-                if (brush.r <= 0f)
-                    continue;
-
-                Color current = maskTexture.GetPixel(px, py);
-
-                if (brush.r > current.r)
-                    maskTexture.SetPixel(px, py, Color.white * brush.r);
-            }
+            return;
         }
 
-        maskTexture.Apply(false);
-        Debug.Log(maskTexture.GetPixel(centerX, centerY));
+        PaintUV(hit.textureCoord);
+    }
+
+    private void PaintUV(Vector2 uv)
+    {
+        brushMaterial.SetVector(
+            BrushPositionId,
+            new Vector4(uv.x, uv.y, 0f, 0f)
+        );
+
+        brushMaterial.SetFloat(
+            BrushSizeId,
+            brushSize
+        );
+
+        brushMaterial.SetFloat(
+            BrushSoftnessId,
+            brushSoftness
+        );
+
+        Graphics.Blit(
+            revealMask,
+            temporaryMask,
+            brushMaterial
+        );
+
+        Graphics.Blit(
+            temporaryMask,
+            revealMask
+        );
+    }
+
+    public void ResetMask()
+    {
+        ClearMask();
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+
+        ReleaseTexture(revealMask);
+        ReleaseTexture(temporaryMask);
+    }
+
+    private void ReleaseTexture(RenderTexture texture)
+    {
+        if (texture == null)
+        {
+            return;
+        }
+
+        texture.Release();
+        Destroy(texture);
     }
 }

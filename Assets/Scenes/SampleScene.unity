@@ -19321,8 +19321,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RevealPainter
   groundRenderer: {fileID: 1927028496}
-  brushTexture: {fileID: 2800000, guid: 991d6c4e3432c084eb1d16a778fca6fa, type: 3}
+  groundCollider: {fileID: 1927028495}
+  brushMaterial: {fileID: 2100000, guid: 493e660e46aee2344a18a30625e36a9b, type: 2}
   brushSize: 0.1
+  brushSoftness: 0.2
+  maskResolution: 512
 --- !u!4 &852102426
 Transform:
   m_ObjectHideFlags: 0
