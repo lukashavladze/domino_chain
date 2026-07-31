@@ -4,8 +4,9 @@ Shader "Hidden/RevealBrush"
     {
         _MainTex ("Previous Mask", 2D) = "black" {}
         _BrushPosition ("Brush Position", Vector) = (0.5, 0.5, 0, 0)
-        _BrushSize ("Brush Size", Float) = 0.05
-        _BrushSoftness ("Brush Softness", Float) = 0.2
+        _BrushSize ("Brush Size", Vector) = (0.04, 0.015, 0, 0)
+        _BrushRotation ("Brush Rotation", Float) = 0
+        _BrushSoftness ("Brush Softness", Float) = 0.05
     }
 
     SubShader
@@ -45,7 +46,8 @@ Shader "Hidden/RevealBrush"
             SAMPLER(sampler_MainTex);
 
             float4 _BrushPosition;
-            float _BrushSize;
+            float4 _BrushSize;
+            float _BrushRotation;
             float _BrushSoftness;
 
             Varyings Vert(Attributes input)
@@ -69,22 +71,55 @@ Shader "Hidden/RevealBrush"
                         input.uv
                     ).r;
 
-                float distanceFromBrush =
-                    distance(input.uv, _BrushPosition.xy);
+                float2 localUV =
+                    input.uv - _BrushPosition.xy;
+
+                float angle = radians(_BrushRotation);
+
+                float cosine = cos(angle);
+                float sine = sin(angle);
+
+                float2 rotatedUV;
+
+                rotatedUV.x =
+                    localUV.x * cosine -
+                    localUV.y * sine;
+
+                rotatedUV.y =
+                    localUV.x * sine +
+                    localUV.y * cosine;
+
+                float2 halfSize =
+                    max(_BrushSize.xy * 0.5, 0.0001);
+
+                float2 normalizedDistance =
+                    abs(rotatedUV) / halfSize;
+
+                float rectangleDistance =
+                    max(
+                        normalizedDistance.x,
+                        normalizedDistance.y
+                    );
 
                 float softness =
-                    max(_BrushSize * _BrushSoftness, 0.0001);
+                    max(_BrushSoftness, 0.0001);
 
                 float brush =
                     1.0 - smoothstep(
-                        _BrushSize - softness,
-                        _BrushSize,
-                        distanceFromBrush
+                        1.0 - softness,
+                        1.0,
+                        rectangleDistance
                     );
 
-                float result = max(previousMask, brush);
+                float result =
+                    max(previousMask, brush);
 
-                return half4(result, result, result, 1);
+                return half4(
+                    result,
+                    result,
+                    result,
+                    1
+                );
             }
 
             ENDHLSL

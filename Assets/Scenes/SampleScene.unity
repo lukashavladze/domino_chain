@@ -19323,8 +19323,8 @@ MonoBehaviour:
   groundRenderer: {fileID: 1927028496}
   groundCollider: {fileID: 1927028495}
   brushMaterial: {fileID: 2100000, guid: 493e660e46aee2344a18a30625e36a9b, type: 2}
-  brushSize: 0.05
-  brushSoftness: 0.1
+  brushSize: {x: 0.022, y: 0.006}
+  brushSoftness: 0.03
   maskResolution: 512
 --- !u!4 &852102426
 Transform:

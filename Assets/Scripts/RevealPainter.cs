@@ -11,11 +11,16 @@ public class RevealPainter : MonoBehaviour
     [Header("GPU Brush")]
     [SerializeField] private Material brushMaterial;
 
-    [Range(0.005f, 0.2f)]
-    [SerializeField] private float brushSize = 0.035f;
+    [Header("Brush Shape")]
+    [SerializeField]
+    private Vector2 brushSize =
+    new Vector2(0.05f, 0.02f);
 
-    [Range(0f, 1f)]
-    [SerializeField] private float brushSoftness = 0.2f;
+    [Range(0f, 0.5f)]
+    [SerializeField] private float brushSoftness = 0.05f;
+
+    private static readonly int BrushRotationId =
+    Shader.PropertyToID("_BrushRotation");
 
     [Header("Performance")]
     [SerializeField] private int maskResolution = 512;
@@ -96,7 +101,9 @@ public class RevealPainter : MonoBehaviour
         RenderTexture.active = previous;
     }
 
-    public void Paint(Vector3 worldPosition)
+    public void Paint(
+     Vector3 worldPosition,
+     Vector3 worldForward)
     {
         Vector3 rayOrigin =
             worldPosition + Vector3.up * 2f;
@@ -114,19 +121,45 @@ public class RevealPainter : MonoBehaviour
             return;
         }
 
-        PaintUV(hit.textureCoord);
+        float rotation =
+            Mathf.Atan2(
+                worldForward.x,
+                worldForward.z
+            ) * Mathf.Rad2Deg;
+
+        PaintUV(
+            hit.textureCoord,
+            rotation
+        );
     }
 
-    private void PaintUV(Vector2 uv)
+    private void PaintUV(
+     Vector2 uv,
+     float rotation)
     {
         brushMaterial.SetVector(
             BrushPositionId,
-            new Vector4(uv.x, uv.y, 0f, 0f)
+            new Vector4(
+                uv.x,
+                uv.y,
+                0f,
+                0f
+            )
+        );
+
+        brushMaterial.SetVector(
+            BrushSizeId,
+            new Vector4(
+                brushSize.x,
+                brushSize.y,
+                0f,
+                0f
+            )
         );
 
         brushMaterial.SetFloat(
-            BrushSizeId,
-            brushSize
+            BrushRotationId,
+            rotation
         );
 
         brushMaterial.SetFloat(

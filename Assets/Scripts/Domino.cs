@@ -55,7 +55,10 @@ public class Domino : MonoBehaviour
 
             if (distanceMoved >= revealPaintDistance)
             {
-                RevealPainter.Instance.Paint(transform.position);
+                RevealPainter.Instance.Paint(
+    transform.position,
+    transform.forward
+);
 
                 lastPaintPosition = transform.position;
                 hasPaintPosition = true;
