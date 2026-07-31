@@ -29,6 +29,7 @@ public class Domino : MonoBehaviour
 
     [Header("Reveal")]
     [SerializeField] private float revealPaintDistance = 0.08f;
+    [SerializeField] private float revealStartAngle = 45f;
 
     private Vector3 lastPaintPosition;
     private bool hasPaintPosition;
@@ -39,31 +40,40 @@ public class Domino : MonoBehaviour
         originalScale = transform.localScale;
     }
 
-    void Update()
+    private void Update()
     {
         if (!hasStarted)
             return;
 
-        if (RevealPainter.Instance != null)
-        {
-            float distanceMoved = hasPaintPosition
-                ? Vector3.Distance(
-                    transform.position,
-                    lastPaintPosition
-                )
-                : float.MaxValue;
+        float tiltAngle = Vector3.Angle(
+            transform.up,
+            Vector3.up
+        );
 
-            if (distanceMoved >= revealPaintDistance)
-            {
-                RevealPainter.Instance.Paint(
-    transform.position,
-    transform.forward
-);
+        // Do not reveal while the domino is still upright.
+        if (tiltAngle < revealStartAngle)
+            return;
 
-                lastPaintPosition = transform.position;
-                hasPaintPosition = true;
-            }
-        }
+        if (RevealPainter.Instance == null)
+            return;
+
+        float distanceMoved = hasPaintPosition
+            ? Vector3.Distance(
+                transform.position,
+                lastPaintPosition
+            )
+            : float.MaxValue;
+
+        if (distanceMoved < revealPaintDistance)
+            return;
+
+        RevealPainter.Instance.Paint(
+            transform.position,
+            transform.forward
+        );
+
+        lastPaintPosition = transform.position;
+        hasPaintPosition = true;
     }
 
     IEnumerator FadeAndDestroy()
@@ -115,6 +125,7 @@ public class Domino : MonoBehaviour
             return;
 
         hasStarted = true;
+        hasPaintPosition = false;
 
         hasPaintPosition = false;
 
