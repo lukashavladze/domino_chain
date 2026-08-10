@@ -136,8 +136,7 @@ public class RevealPainter : MonoBehaviour
 
     public void PaintCircle(Vector3 worldPosition, float worldRadius)
     {
-        Vector3 rayOrigin =
-            worldPosition + Vector3.up * 2f;
+        Vector3 rayOrigin = worldPosition + Vector3.up * 2f;
 
         Ray ray = new Ray(
             rayOrigin,
@@ -149,17 +148,33 @@ public class RevealPainter : MonoBehaviour
                 out RaycastHit hit,
                 5f))
         {
+            Debug.LogError(
+                "PAINT FAILED: Ground collider was not hit."
+            );
+
             return;
         }
 
         Vector2 uv = hit.textureCoord;
 
-        // Convert your wave radius into UV brush size.
-        // Start with this multiplier and tune it.
-        float uvRadius = worldRadius * 0.1f;
+        Bounds groundBounds = groundRenderer.bounds;
+
+        float worldDiameter = worldRadius * 2f;
+
+        float uvWidth =
+            worldDiameter / groundBounds.size.x;
+
+        float uvHeight =
+            worldDiameter / groundBounds.size.z;
+
+        Debug.Log(
+            $"PAINT CIRCLE: UV={uv} " +
+            $"Radius={worldRadius} " +
+            $"Size=({uvWidth}, {uvHeight})"
+        );
 
         brushMaterial.SetVector(
-            BrushPositionId,
+            "_BrushPosition",
             new Vector4(
                 uv.x,
                 uv.y,
@@ -169,23 +184,13 @@ public class RevealPainter : MonoBehaviour
         );
 
         brushMaterial.SetVector(
-            BrushSizeId,
+            "_BrushSize",
             new Vector4(
-                uvRadius,
-                uvRadius,
+                uvWidth,
+                uvHeight,
                 0f,
                 0f
             )
-        );
-
-        brushMaterial.SetFloat(
-            BrushRotationId,
-            0f
-        );
-
-        brushMaterial.SetFloat(
-            BrushSoftnessId,
-            brushSoftness
         );
 
         Graphics.Blit(
@@ -196,6 +201,11 @@ public class RevealPainter : MonoBehaviour
 
         Graphics.Blit(
             temporaryMask,
+            revealMask
+        );
+
+        groundRenderer.material.SetTexture(
+            "_RevealMask",
             revealMask
         );
     }

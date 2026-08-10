@@ -1,48 +1,53 @@
 using UnityEngine;
 
-[RequireComponent(typeof(LineRenderer))]
+[RequireComponent(typeof(MeshFilter))]
+[RequireComponent(typeof(MeshRenderer))]
 public class RevealWave : MonoBehaviour
 {
-    [Header("Wave Visual")]
+    [Header("Wave")]
     public float startRadius = 0.03f;
     public float endRadius = 0.35f;
     public float duration = 0.35f;
 
+    [Header("Visual")]
     public Color waveColor =
-        new Color(0.25f, 0.8f, 1f, 0.9f);
+        new Color(0.15f, 0.75f, 1f, 0.45f);
 
-    [Range(12, 64)]
-    public int segments = 32;
+    [Range(16, 64)]
+    public int segments = 40;
 
     [Header("Reveal")]
-    [Tooltip("How often the expanding wave paints the ground.")]
-    public float revealInterval = 0.03f;
+    public float revealInterval = 0.025f;
 
-    private LineRenderer line;
+    private Mesh mesh;
+    private MeshRenderer meshRenderer;
 
     private float timer;
     private float revealTimer;
 
+    private MaterialPropertyBlock propertyBlock;
+
+    private static readonly int BaseColorId =
+        Shader.PropertyToID("_BaseColor");
+
     private void Awake()
     {
-        line = GetComponent<LineRenderer>();
+        meshRenderer = GetComponent<MeshRenderer>();
 
-        line.loop = true;
-        line.useWorldSpace = false;
-        line.positionCount = segments;
+        propertyBlock =
+            new MaterialPropertyBlock();
 
-        line.startWidth = 0.025f;
-        line.endWidth = 0.025f;
+        CreateCircleMesh();
 
-        line.startColor = waveColor;
-        line.endColor = waveColor;
+        UpdateRadius(startRadius);
 
-        UpdateCircle(startRadius);
+        SetColor(waveColor);
     }
 
     private void Update()
     {
         timer += Time.deltaTime;
+        revealTimer += Time.deltaTime;
 
         float t = Mathf.Clamp01(
             timer / duration
@@ -54,63 +59,134 @@ public class RevealWave : MonoBehaviour
             t
         );
 
-        // Visual blue circle
-        UpdateCircle(radius);
+        // Expand filled visual wave.
+        UpdateRadius(radius);
 
-        // Reveal exactly according to current wave radius
-        if (RevealPainter.Instance != null)
+        // Reveal image underneath.
+        if (revealTimer >= revealInterval)
         {
-            RevealPainter.Instance.PaintCircle(
-                transform.position,
-                radius
-            );
+            revealTimer = 0f;
+
+            PaintReveal(radius);
         }
 
-        // Fade visual wave
-        Color color = waveColor;
+        // Fade filled blue wave.
+        Color currentColor = waveColor;
 
-        color.a = Mathf.Lerp(
-            waveColor.a,
-            0f,
-            t
-        );
+        currentColor.a =
+            Mathf.Lerp(
+                waveColor.a,
+                0f,
+                t
+            );
 
-        line.startColor = color;
-        line.endColor = color;
+        SetColor(currentColor);
 
         if (t >= 1f)
         {
+            PaintReveal(endRadius);
+
             Destroy(gameObject);
         }
     }
 
-    private void RevealGround()
+    private void PaintReveal(float radius)
     {
         if (RevealPainter.Instance == null)
             return;
 
-        RevealPainter.Instance.Paint(
+        RevealPainter.Instance.PaintCircle(
             transform.position,
-            transform.forward
+            radius
         );
     }
 
-    private void UpdateCircle(float radius)
+    private void CreateCircleMesh()
     {
+        mesh = new Mesh();
+
+        Vector3[] vertices =
+            new Vector3[segments + 1];
+
+        int[] triangles =
+            new int[segments * 3];
+
+        // Center
+        vertices[0] = Vector3.zero;
+
+        // Outer circle
         for (int i = 0; i < segments; i++)
         {
             float angle =
-                i / (float)segments *
+                (i / (float)segments) *
                 Mathf.PI *
                 2f;
 
-            Vector3 position = new Vector3(
-                Mathf.Cos(angle) * radius,
-                0f,
-                Mathf.Sin(angle) * radius
-            );
+            vertices[i + 1] =
+                new Vector3(
+                    Mathf.Cos(angle),
+                    0f,
+                    Mathf.Sin(angle)
+                );
+        }
 
-            line.SetPosition(i, position);
+        // Triangles
+        for (int i = 0; i < segments; i++)
+        {
+            int next =
+                (i + 1) % segments;
+
+            int triangleIndex =
+                i * 3;
+
+            triangles[triangleIndex] = 0;
+            triangles[triangleIndex + 1] =
+                i + 1;
+            triangles[triangleIndex + 2] =
+                next + 1;
+        }
+
+        mesh.vertices = vertices;
+        mesh.triangles = triangles;
+
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+
+        GetComponent<MeshFilter>().sharedMesh =
+            mesh;
+    }
+
+    private void UpdateRadius(float radius)
+    {
+        transform.localScale =
+            new Vector3(
+                radius,
+                1f,
+                radius
+            );
+    }
+
+    private void SetColor(Color color)
+    {
+        meshRenderer.GetPropertyBlock(
+            propertyBlock
+        );
+
+        propertyBlock.SetColor(
+            BaseColorId,
+            color
+        );
+
+        meshRenderer.SetPropertyBlock(
+            propertyBlock
+        );
+    }
+
+    private void OnDestroy()
+    {
+        if (mesh != null)
+        {
+            Destroy(mesh);
         }
     }
 }

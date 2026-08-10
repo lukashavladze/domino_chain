@@ -1,124 +1,93 @@
-Shader "Hidden/RevealBrush"
+Shader "Hidden/CircleRevealBrush"
 {
     Properties
     {
         _MainTex ("Previous Mask", 2D) = "black" {}
         _BrushPosition ("Brush Position", Vector) = (0.5, 0.5, 0, 0)
-        _BrushSize ("Brush Size", Vector) = (0.04, 0.015, 0, 0)
-        _BrushRotation ("Brush Rotation", Float) = 0
-        _BrushSoftness ("Brush Softness", Float) = 0.05
+        _BrushSize ("Brush Size", Vector) = (0.1, 0.1, 0, 0)
     }
 
     SubShader
     {
-        Tags
-        {
-            "RenderType" = "Opaque"
-            "RenderPipeline" = "UniversalPipeline"
-        }
-
+        Cull Off
         ZWrite Off
         ZTest Always
-        Cull Off
 
         Pass
         {
             HLSLPROGRAM
 
-            #pragma vertex Vert
-            #pragma fragment Frag
+            #pragma vertex vert
+            #pragma fragment frag
 
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "UnityCG.cginc"
 
-            struct Attributes
-            {
-                float4 positionOS : POSITION;
-                float2 uv : TEXCOORD0;
-            };
-
-            struct Varyings
-            {
-                float4 positionHCS : SV_POSITION;
-                float2 uv : TEXCOORD0;
-            };
-
-            TEXTURE2D(_MainTex);
-            SAMPLER(sampler_MainTex);
+            sampler2D _MainTex;
 
             float4 _BrushPosition;
             float4 _BrushSize;
-            float _BrushRotation;
-            float _BrushSoftness;
 
-            Varyings Vert(Attributes input)
+            struct appdata
             {
-                Varyings output;
+                float4 vertex : POSITION;
+                float2 uv : TEXCOORD0;
+            };
 
-                output.positionHCS =
-                    TransformObjectToHClip(input.positionOS.xyz);
+            struct v2f
+            {
+                float4 vertex : SV_POSITION;
+                float2 uv : TEXCOORD0;
+            };
 
-                output.uv = input.uv;
+            v2f vert(appdata v)
+            {
+                v2f o;
 
-                return output;
+                o.vertex =
+                    UnityObjectToClipPos(v.vertex);
+
+                o.uv = v.uv;
+
+                return o;
             }
 
-            half4 Frag(Varyings input) : SV_Target
+            fixed4 frag(v2f i) : SV_Target
             {
                 float previousMask =
-                    SAMPLE_TEXTURE2D(
-                        _MainTex,
-                        sampler_MainTex,
-                        input.uv
-                    ).r;
+                    tex2D(_MainTex, i.uv).r;
 
-                float2 localUV =
-                    input.uv - _BrushPosition.xy;
-
-                float angle = radians(_BrushRotation);
-
-                float cosine = cos(angle);
-                float sine = sin(angle);
-
-                float2 rotatedUV;
-
-                rotatedUV.x =
-                    localUV.x * cosine -
-                    localUV.y * sine;
-
-                rotatedUV.y =
-                    localUV.x * sine +
-                    localUV.y * cosine;
-
-                float2 halfSize =
-                    max(_BrushSize.xy * 0.5, 0.0001);
-
-                float2 normalizedDistance =
-                    abs(rotatedUV) / halfSize;
-
-                float rectangleDistance =
+                float2 safeBrushSize =
                     max(
-                        normalizedDistance.x,
-                        normalizedDistance.y
+                        _BrushSize.xy,
+                        float2(0.00001, 0.00001)
                     );
 
-                float softness =
-                    max(_BrushSoftness, 0.0001);
+                float2 local =
+                    (i.uv - _BrushPosition.xy)
+                    / safeBrushSize;
 
-                float brush =
-                    1.0 - smoothstep(
-                        1.0 - softness,
-                        1.0,
-                        rectangleDistance
+                float dist =
+                    length(local);
+
+                float circle =
+                    1.0 -
+                    smoothstep(
+                        0.42,
+                        0.50,
+                        dist
                     );
 
                 float result =
-                    max(previousMask, brush);
+                    max(
+                        previousMask,
+                        circle
+                    );
 
-                return half4(
+                return fixed4(
                     result,
                     result,
                     result,
-                    1
+                    1.0
                 );
             }
 
