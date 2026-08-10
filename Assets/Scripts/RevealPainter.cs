@@ -133,6 +133,73 @@ public class RevealPainter : MonoBehaviour
         );
     }
 
+
+    public void PaintCircle(Vector3 worldPosition, float worldRadius)
+    {
+        Vector3 rayOrigin =
+            worldPosition + Vector3.up * 2f;
+
+        Ray ray = new Ray(
+            rayOrigin,
+            Vector3.down
+        );
+
+        if (!groundCollider.Raycast(
+                ray,
+                out RaycastHit hit,
+                5f))
+        {
+            return;
+        }
+
+        Vector2 uv = hit.textureCoord;
+
+        // Convert your wave radius into UV brush size.
+        // Start with this multiplier and tune it.
+        float uvRadius = worldRadius * 0.1f;
+
+        brushMaterial.SetVector(
+            BrushPositionId,
+            new Vector4(
+                uv.x,
+                uv.y,
+                0f,
+                0f
+            )
+        );
+
+        brushMaterial.SetVector(
+            BrushSizeId,
+            new Vector4(
+                uvRadius,
+                uvRadius,
+                0f,
+                0f
+            )
+        );
+
+        brushMaterial.SetFloat(
+            BrushRotationId,
+            0f
+        );
+
+        brushMaterial.SetFloat(
+            BrushSoftnessId,
+            brushSoftness
+        );
+
+        Graphics.Blit(
+            revealMask,
+            temporaryMask,
+            brushMaterial
+        );
+
+        Graphics.Blit(
+            temporaryMask,
+            revealMask
+        );
+    }
+
     private void PaintUV(
      Vector2 uv,
      float rotation)

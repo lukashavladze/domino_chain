@@ -5,6 +5,18 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody))]
 public class Domino : MonoBehaviour
 {
+    [Header("Line")]
+    public DominoLine ownerLine;
+
+    [Header("Blocking")]
+    [SerializeField] private float standingAngle = 20f;
+
+    [Header("Reveal Wave")]
+    [SerializeField] private RevealWave revealWavePrefab;
+    [SerializeField] private float waveGroundOffset = 0.03f;
+
+    private bool waveSpawned;
+
     [Header("Connections")]
     public List<Domino> nextDominoes = new();
 
@@ -18,26 +30,39 @@ public class Domino : MonoBehaviour
     [Header("Cleanup")]
     public float fadeDuration = 0.3f;
 
-    Rigidbody rb;
-
-    bool hasStarted;
-    bool destroyScheduled;
-
-    Vector3 originalScale;
-
-    public bool HasStarted => hasStarted;
-
     [Header("Reveal")]
     [SerializeField] private float revealPaintDistance = 0.08f;
     [SerializeField] private float revealStartAngle = 45f;
 
+    private Rigidbody rb;
+
+    private bool hasStarted;
+    private bool destroyScheduled;
+
+    private Vector3 originalScale;
+
     private Vector3 lastPaintPosition;
     private bool hasPaintPosition;
 
-    void Awake()
+    public bool HasStarted => hasStarted;
+
+    private void Awake()
     {
         rb = GetComponent<Rigidbody>();
         originalScale = transform.localScale;
+    }
+
+    public bool IsStanding()
+    {
+        if (hasStarted)
+            return false;
+
+        float angle = Vector3.Angle(
+            transform.up,
+            Vector3.up
+        );
+
+        return angle <= standingAngle;
     }
 
     private void Update()
@@ -50,19 +75,49 @@ public class Domino : MonoBehaviour
             Vector3.up
         );
 
-        // Do not reveal while the domino is still upright.
+        // Don't reveal or spawn wave while still upright.
         if (tiltAngle < revealStartAngle)
             return;
 
+        SpawnRevealWave();
+
+        PaintReveal();
+    }
+
+    private void SpawnRevealWave()
+    {
+        if (waveSpawned)
+            return;
+
+        waveSpawned = true;
+
+        if (revealWavePrefab == null)
+            return;
+
+        Vector3 wavePosition = transform.position;
+
+        // Assumes ground is around Y = 0.
+        wavePosition.y = waveGroundOffset;
+
+        Instantiate(
+            revealWavePrefab,
+            wavePosition,
+            Quaternion.identity
+        );
+    }
+
+    private void PaintReveal()
+    {
         if (RevealPainter.Instance == null)
             return;
 
-        float distanceMoved = hasPaintPosition
-            ? Vector3.Distance(
-                transform.position,
-                lastPaintPosition
-            )
-            : float.MaxValue;
+        float distanceMoved =
+            hasPaintPosition
+                ? Vector3.Distance(
+                    transform.position,
+                    lastPaintPosition
+                )
+                : float.MaxValue;
 
         if (distanceMoved < revealPaintDistance)
             return;
@@ -76,62 +131,22 @@ public class Domino : MonoBehaviour
         hasPaintPosition = true;
     }
 
-    IEnumerator FadeAndDestroy()
-    {
-        yield return new WaitForSeconds(1f);
-
-        Vector3 startScale = transform.localScale;
-        Vector3 startPos = transform.position;
-
-        float t = 0f;
-
-        while (t < fadeDuration)
-        {
-            t += Time.deltaTime;
-
-            float p = t / fadeDuration;
-
-            transform.localScale = Vector3.Lerp(startScale, Vector3.zero, p);
-            transform.position = Vector3.Lerp(
-                startPos,
-                startPos + Vector3.down * 0.1f,
-                p);
-
-            yield return null;
-        }
-
-        Destroy(gameObject);
-    }
-
-    public void ResetDomino()
-    {
-        StopAllCoroutines();
-
-        hasPaintPosition = false;
-        hasStarted = false;
-        destroyScheduled = false;
-
-        rb.isKinematic = true;
-        rb.linearVelocity = Vector3.zero;
-        rb.angularVelocity = Vector3.zero;
-
-        transform.localRotation = Quaternion.identity;
-        transform.localScale = originalScale;
-    }
-
     public void Fall(Vector3 direction)
     {
         if (hasStarted)
             return;
 
         hasStarted = true;
-        hasPaintPosition = false;
 
         hasPaintPosition = false;
+        waveSpawned = false;
 
         rb.isKinematic = false;
 
-        rb.AddForce(direction.normalized * pushForce, ForceMode.Impulse);
+        rb.AddForce(
+            direction.normalized * pushForce,
+            ForceMode.Impulse
+        );
 
         if (!destroyScheduled)
         {
@@ -139,6 +154,7 @@ public class Domino : MonoBehaviour
             StartCoroutine(FadeAndDestroy());
         }
 
+        CancelInvoke(nameof(TriggerNext));
         Invoke(nameof(TriggerNext), nextDelay);
     }
 
@@ -150,23 +166,97 @@ public class Domino : MonoBehaviour
         if (nextDominoes.Count == 0)
             return;
 
-        Vector3 dir =
-            (nextDominoes[0].transform.position - transform.position).normalized;
+        Domino next = nextDominoes[0];
 
-        Fall(dir);
+        if (next == null)
+            return;
+
+        Vector3 direction =
+            next.transform.position -
+            transform.position;
+
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude < 0.001f)
+            return;
+
+        Fall(direction.normalized);
     }
 
-    void TriggerNext()
+    private void TriggerNext()
     {
         foreach (Domino domino in nextDominoes)
         {
             if (domino == null)
                 continue;
 
-            Vector3 dir =
-                (domino.transform.position - transform.position).normalized;
+            Vector3 direction =
+                domino.transform.position -
+                transform.position;
 
-            domino.Fall(dir);
+            direction.y = 0f;
+
+            if (direction.sqrMagnitude < 0.001f)
+                continue;
+
+            domino.Fall(direction.normalized);
         }
+    }
+
+    private IEnumerator FadeAndDestroy()
+    {
+        yield return new WaitForSeconds(1f);
+
+        Vector3 startScale = transform.localScale;
+        Vector3 startPosition = transform.position;
+
+        float timer = 0f;
+
+        while (timer < fadeDuration)
+        {
+            timer += Time.deltaTime;
+
+            float t = Mathf.Clamp01(
+                timer / fadeDuration
+            );
+
+            transform.localScale =
+                Vector3.Lerp(
+                    startScale,
+                    Vector3.zero,
+                    t
+                );
+
+            transform.position =
+                Vector3.Lerp(
+                    startPosition,
+                    startPosition + Vector3.down * 0.1f,
+                    t
+                );
+
+            yield return null;
+        }
+
+        Destroy(gameObject);
+    }
+
+    public void ResetDomino()
+    {
+        StopAllCoroutines();
+        CancelInvoke();
+
+        hasStarted = false;
+        destroyScheduled = false;
+
+        hasPaintPosition = false;
+        waveSpawned = false;
+
+        rb.isKinematic = true;
+
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+
+        transform.localRotation = Quaternion.identity;
+        transform.localScale = originalScale;
     }
 }
