@@ -29,11 +29,11 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _BrushRotation: -96.93401
+    - _BrushRotation: 144.30928
     - _BrushSize: 0.05
     - _BrushSoftness: 0.03
     m_Colors:
-    - _BrushPosition: {r: 0.27283525, g: 0.38885015, b: 0, a: 0}
+    - _BrushPosition: {r: 0.75748026, g: 0.8315253, b: 0, a: 0}
     - _BrushSize: {r: 0.07727273, g: 0.085, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
