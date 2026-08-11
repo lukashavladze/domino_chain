@@ -36,24 +36,34 @@ public class InputManager : MonoBehaviour
 
     void TryHit(Vector2 screenPosition)
     {
-        Ray ray = cam.ScreenPointToRay(screenPosition);
+        Ray ray =
+            cam.ScreenPointToRay(screenPosition);
 
-        if (!Physics.Raycast(ray, out RaycastHit hit))
+        if (!Physics.Raycast(
+                ray,
+                out RaycastHit hit))
+        {
             return;
+        }
 
-        Domino domino = hit.collider.GetComponent<Domino>();
+        Domino domino =
+            hit.collider.GetComponentInParent<Domino>();
 
         if (domino == null)
             return;
 
-        if (!domino.canStartChain)
+        DominoLine line =
+            domino.ownerLine;
+
+        if (line == null)
             return;
 
-        domino.StartChain();
+        // Only the FIRST domino is allowed to be clicked.
+        if (domino != line.firstDomino)
+            return;
 
-        //Vector3 direction =
-        //    domino.transform.forward;
-
-        //domino.Fall(direction);
+        // This safely checks blocking/state at the exact
+        // moment the player clicks.
+        line.TryStartLine();
     }
 }

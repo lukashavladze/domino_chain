@@ -16,9 +16,9 @@ public class DominoLine : MonoBehaviour
 
     public LayerMask blockerMask = ~0;
 
-    // Once we discover a blocker, keep the line blocked
-    // until that domino is actually destroyed/disappears.
-    private Domino lockedBlocker;
+    private bool lineStarted;
+
+
 
     [Header("Visual")]
     [SerializeField] private Renderer dominoRenderer;
@@ -100,6 +100,32 @@ public class DominoLine : MonoBehaviour
         RefreshAvailability();
     }
 
+    public bool CanStartLine()
+    {
+        if (lineStarted)
+            return false;
+
+        if (firstDomino == null)
+            return false;
+
+        if (firstDomino.HasStarted)
+            return false;
+
+        return !IsBlocked();
+    }
+
+    public bool TryStartLine()
+    {
+        if (!CanStartLine())
+            return false;
+
+        lineStarted = true;
+
+        firstDomino.StartChain();
+
+        return true;
+    }
+
     private void RefreshAvailability()
     {
         if (firstDomino == null)
@@ -122,19 +148,14 @@ public class DominoLine : MonoBehaviour
 
     private bool IsBlocked()
     {
-        // We previously found a blocker.
-        // Unity destroyed objects compare == null,
-        // so this stays blocked until that domino disappears.
-        if (lockedBlocker != null)
-        {
-            return true;
-        }
-
-        if (dominoes.Count < 2)
+        if (dominoes == null || dominoes.Count < 2)
             return false;
 
-        Domino last = dominoes[dominoes.Count - 1];
-        Domino previous = dominoes[dominoes.Count - 2];
+        Domino last =
+            dominoes[dominoes.Count - 1];
+
+        Domino previous =
+            dominoes[dominoes.Count - 2];
 
         if (last == null || previous == null)
             return false;
@@ -154,12 +175,13 @@ public class DominoLine : MonoBehaviour
             last.transform.position +
             direction * blockerCheckDistance;
 
-        Collider[] hits = Physics.OverlapSphere(
-            checkPosition,
-            blockerCheckRadius,
-            blockerMask,
-            QueryTriggerInteraction.Ignore
-        );
+        Collider[] hits =
+            Physics.OverlapSphere(
+                checkPosition,
+                blockerCheckRadius,
+                blockerMask,
+                QueryTriggerInteraction.Ignore
+            );
 
         foreach (Collider hit in hits)
         {
@@ -169,23 +191,25 @@ public class DominoLine : MonoBehaviour
             if (other == null)
                 continue;
 
-            // Don't block ourselves.
+            // Ignore dominoes from this same chain.
             if (other.ownerLine == this)
                 continue;
 
-            // Only an upright / unfallen domino creates
-            // a NEW blocking relationship.
+            // Ignore dominoes that have already started falling.
+            if (other.HasStarted)
+                continue;
+
+            // Ignore dominoes that are no longer upright.
             if (!other.IsStanding())
                 continue;
 
-            lockedBlocker = other;
-
+            // Found a real blocker.
             return true;
         }
 
+        // Nothing currently blocks the exit.
         return false;
     }
-
     public void StartLine()
     {
         if (firstDomino == null)
@@ -199,7 +223,7 @@ public class DominoLine : MonoBehaviour
 
     public void ResetLine()
     {
-        lockedBlocker = null;
+        lineStarted = false;
 
         foreach (Domino domino in dominoes)
         {
