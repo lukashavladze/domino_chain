@@ -18,6 +18,16 @@ public class DominoLine : MonoBehaviour
 
     private bool lineStarted;
 
+    [Header("Procedural Blocking")]
+
+    [Tooltip("Use explicit generated dependencies instead of Physics overlap blocking.")]
+    public bool useGeneratedBlocking = false;
+
+    [Tooltip("These lines must start before this line becomes available.")]
+    public List<DominoLine> blockedByLines = new();
+
+    public bool HasStartedLine => lineStarted;
+
 
 
     [Header("Visual")]
@@ -145,35 +155,90 @@ public class DominoLine : MonoBehaviour
 
        
     }
-
     private bool IsBlocked()
     {
-        if (dominoes == null || dominoes.Count < 2)
+        // ==============================================
+        // 1. GENERATED DEPENDENCIES
+        // ==============================================
+
+        if (useGeneratedBlocking)
+        {
+            foreach (DominoLine blocker in blockedByLines)
+            {
+                if (blocker == null)
+                    continue;
+
+                if (!blocker.HasStartedLine)
+                {
+                    return true;
+                }
+            }
+        }
+
+
+        // ==============================================
+        // 2. REAL PHYSICAL BLOCKING
+        // ==============================================
+
+        if (IsPhysicallyBlocked())
+        {
+            return true;
+        }
+
+
+        return false;
+    }
+
+    private bool IsPhysicallyBlocked()
+    {
+        if (dominoes == null ||
+            dominoes.Count < 2)
+        {
             return false;
+        }
+
 
         Domino last =
-            dominoes[dominoes.Count - 1];
+            dominoes[
+                dominoes.Count - 1
+            ];
 
         Domino previous =
-            dominoes[dominoes.Count - 2];
+            dominoes[
+                dominoes.Count - 2
+            ];
 
-        if (last == null || previous == null)
+
+        if (last == null ||
+            previous == null)
+        {
             return false;
+        }
+
 
         Vector3 direction =
             last.transform.position -
             previous.transform.position;
 
+
         direction.y = 0f;
 
-        if (direction.sqrMagnitude < 0.001f)
+
+        if (direction.sqrMagnitude <
+            0.001f)
+        {
             return false;
+        }
+
 
         direction.Normalize();
 
+
         Vector3 checkPosition =
             last.transform.position +
-            direction * blockerCheckDistance;
+            direction *
+            blockerCheckDistance;
+
 
         Collider[] hits =
             Physics.OverlapSphere(
@@ -183,33 +248,39 @@ public class DominoLine : MonoBehaviour
                 QueryTriggerInteraction.Ignore
             );
 
+
         foreach (Collider hit in hits)
         {
             Domino other =
                 hit.GetComponentInParent<Domino>();
 
+
             if (other == null)
                 continue;
 
-            // Ignore dominoes from this same chain.
+
+            // Same line is never a blocker.
             if (other.ownerLine == this)
                 continue;
 
-            // Ignore dominoes that have already started falling.
+
+            // Already falling/disappearing does not block.
             if (other.HasStarted)
                 continue;
 
-            // Ignore dominoes that are no longer upright.
+
+            // Fallen domino does not block.
             if (!other.IsStanding())
                 continue;
 
-            // Found a real blocker.
+
             return true;
         }
 
-        // Nothing currently blocks the exit.
+
         return false;
     }
+
     public void StartLine()
     {
         if (firstDomino == null)
