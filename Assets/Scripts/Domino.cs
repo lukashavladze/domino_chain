@@ -25,10 +25,6 @@ public class Domino : MonoBehaviour
     [Header("Cleanup")]
     public float fadeDuration = 0.3f;
 
-    [Header("Reveal")]
-    [SerializeField] private float revealPaintDistance = 0.025f;
-    [SerializeField] private float revealStartAngle = 45f;
-
     [Header("Reveal Footprint")]
     [SerializeField] private float revealLength = 0.35f;
     [SerializeField] private float revealWidth = 0.25f;
@@ -39,9 +35,9 @@ public class Domino : MonoBehaviour
     private bool destroyScheduled;
 
     private Vector3 originalScale;
+    private Vector3 originalPosition;
+    private Vector3 originalForward;
 
-    private Vector3 lastPaintPosition;
-    private bool hasPaintPosition;
 
     public bool HasStarted => hasStarted;
 
@@ -49,7 +45,10 @@ public class Domino : MonoBehaviour
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
+
         originalScale = transform.localScale;
+        originalPosition = transform.position;
+        originalForward = transform.forward;
     }
 
     public bool IsStanding()
@@ -65,53 +64,21 @@ public class Domino : MonoBehaviour
         return angle <= standingAngle;
     }
 
-    private void Update()
-    {
-        if (!hasStarted)
-            return;
-
-        float tiltAngle = Vector3.Angle(
-            transform.up,
-            Vector3.up
-        );
-
-        // Don't reveal or spawn wave while still upright.
-        if (tiltAngle < revealStartAngle)
-            return;
-
-        PaintReveal();
-    }
-
-    private void PaintReveal()
+    private void PaintOriginalFootprint()
     {
         if (RevealPainter.Instance == null)
             return;
 
-        float distanceMoved =
-            hasPaintPosition
-                ? Vector3.Distance(
-                    transform.position,
-                    lastPaintPosition
-                )
-                : float.MaxValue;
-
-        if (distanceMoved < revealPaintDistance)
-            return;
-
         RevealPainter.Instance.Paint(
-            transform.position,
-            transform.forward,
+            originalPosition,
+            originalForward,
             new Vector2(
                 revealLength,
                 revealWidth
             )
         );
-
-        lastPaintPosition =
-            transform.position;
-
-        hasPaintPosition = true;
     }
+
 
     public void Fall(Vector3 direction)
     {
@@ -119,8 +86,7 @@ public class Domino : MonoBehaviour
             return;
 
         hasStarted = true;
-
-        hasPaintPosition = false;
+        
 
         rb.isKinematic = false;
 
@@ -188,8 +154,14 @@ public class Domino : MonoBehaviour
     {
         yield return new WaitForSeconds(1f);
 
-        Vector3 startScale = transform.localScale;
-        Vector3 startPosition = transform.position;
+        // Reveal when this domino starts fading away.
+        PaintOriginalFootprint();
+
+        Vector3 startScale =
+            transform.localScale;
+
+        Vector3 startPosition =
+            transform.position;
 
         float timer = 0f;
 
@@ -197,9 +169,10 @@ public class Domino : MonoBehaviour
         {
             timer += Time.deltaTime;
 
-            float t = Mathf.Clamp01(
-                timer / fadeDuration
-            );
+            float t =
+                Mathf.Clamp01(
+                    timer / fadeDuration
+                );
 
             transform.localScale =
                 Vector3.Lerp(
@@ -211,7 +184,8 @@ public class Domino : MonoBehaviour
             transform.position =
                 Vector3.Lerp(
                     startPosition,
-                    startPosition + Vector3.down * 0.1f,
+                    startPosition +
+                    Vector3.down * 0.1f,
                     t
                 );
 
@@ -228,8 +202,6 @@ public class Domino : MonoBehaviour
 
         hasStarted = false;
         destroyScheduled = false;
-
-        hasPaintPosition = false;
 
         rb.isKinematic = true;
 
