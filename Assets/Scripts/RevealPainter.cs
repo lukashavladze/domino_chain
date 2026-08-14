@@ -12,9 +12,6 @@ public class RevealPainter : MonoBehaviour
     [SerializeField] private Material brushMaterial;
 
     [Header("Brush Shape")]
-    [SerializeField]
-    private Vector2 brushSize =
-    new Vector2(0.05f, 0.02f);
 
     [Range(0f, 0.5f)]
     [SerializeField] private float brushSoftness = 0.05f;
@@ -103,7 +100,8 @@ public class RevealPainter : MonoBehaviour
 
     public void Paint(
      Vector3 worldPosition,
-     Vector3 worldForward)
+     Vector3 worldForward,
+     Vector2 worldBrushSize)
     {
         Vector3 rayOrigin =
             worldPosition + Vector3.up * 2f;
@@ -127,93 +125,33 @@ public class RevealPainter : MonoBehaviour
                 worldForward.z
             ) * Mathf.Rad2Deg;
 
-        PaintUV(
-            hit.textureCoord,
-            rotation
-        );
-    }
-
-
-    public void PaintCircle(Vector3 worldPosition, float worldRadius)
-    {
-        Vector3 rayOrigin = worldPosition + Vector3.up * 2f;
-
-        Ray ray = new Ray(
-            rayOrigin,
-            Vector3.down
-        );
-
-        if (!groundCollider.Raycast(
-                ray,
-                out RaycastHit hit,
-                5f))
-        {
-            Debug.LogError(
-                "PAINT FAILED: Ground collider was not hit."
-            );
-
-            return;
-        }
-
-        Vector2 uv = hit.textureCoord;
-
-        Bounds groundBounds = groundRenderer.bounds;
-
-        float worldDiameter = worldRadius * 2f;
+        Bounds groundBounds =
+    groundRenderer.bounds;
 
         float uvWidth =
-            worldDiameter / groundBounds.size.x;
+            worldBrushSize.x /
+            groundBounds.size.x;
 
         float uvHeight =
-            worldDiameter / groundBounds.size.z;
+            worldBrushSize.y /
+            groundBounds.size.z;
 
-        Debug.Log(
-            $"PAINT CIRCLE: UV={uv} " +
-            $"Radius={worldRadius} " +
-            $"Size=({uvWidth}, {uvHeight})"
-        );
-
-        brushMaterial.SetVector(
-            "_BrushPosition",
-            new Vector4(
-                uv.x,
-                uv.y,
-                0f,
-                0f
-            )
-        );
-
-        brushMaterial.SetVector(
-            "_BrushSize",
-            new Vector4(
+        PaintUV(
+            hit.textureCoord,
+            rotation,
+            new Vector2(
                 uvWidth,
-                uvHeight,
-                0f,
-                0f
+                uvHeight
             )
-        );
-
-        Graphics.Blit(
-            revealMask,
-            temporaryMask,
-            brushMaterial
-        );
-
-        Graphics.Blit(
-            temporaryMask,
-            revealMask
-        );
-
-        groundRenderer.material.SetTexture(
-            "_RevealMask",
-            revealMask
         );
     }
 
     private void PaintUV(
-     Vector2 uv,
-     float rotation)
+    Vector2 uv,
+    float rotation,
+    Vector2 uvBrushSize)
     {
+        // Position of this domino on the ground texture.
         brushMaterial.SetVector(
             BrushPositionId,
             new Vector4(
@@ -224,16 +162,18 @@ public class RevealPainter : MonoBehaviour
             )
         );
 
+        // Size calculated from world-space domino reveal size.
         brushMaterial.SetVector(
             BrushSizeId,
             new Vector4(
-                brushSize.x,
-                brushSize.y,
+                uvBrushSize.x,
+                uvBrushSize.y,
                 0f,
                 0f
             )
         );
 
+        // Rotate brush to match domino direction.
         brushMaterial.SetFloat(
             BrushRotationId,
             rotation
@@ -252,6 +192,12 @@ public class RevealPainter : MonoBehaviour
 
         Graphics.Blit(
             temporaryMask,
+            revealMask
+        );
+
+        // Keep the ground material connected to the current mask.
+        groundRenderer.material.SetTexture(
+            RevealMaskId,
             revealMask
         );
     }

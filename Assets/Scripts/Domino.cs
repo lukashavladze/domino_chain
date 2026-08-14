@@ -11,11 +11,6 @@ public class Domino : MonoBehaviour
     [Header("Blocking")]
     [SerializeField] private float standingAngle = 20f;
 
-    [Header("Reveal Wave")]
-    [SerializeField] private RevealWave revealWavePrefab;
-    [SerializeField] private float waveGroundOffset = 0.03f;
-
-    private bool waveSpawned;
 
     [Header("Connections")]
     public List<Domino> nextDominoes = new();
@@ -31,8 +26,12 @@ public class Domino : MonoBehaviour
     public float fadeDuration = 0.3f;
 
     [Header("Reveal")]
-    [SerializeField] private float revealPaintDistance = 0.08f;
+    [SerializeField] private float revealPaintDistance = 0.025f;
     [SerializeField] private float revealStartAngle = 45f;
+
+    [Header("Reveal Footprint")]
+    [SerializeField] private float revealLength = 0.35f;
+    [SerializeField] private float revealWidth = 0.25f;
 
     private Rigidbody rb;
 
@@ -45,6 +44,7 @@ public class Domino : MonoBehaviour
     private bool hasPaintPosition;
 
     public bool HasStarted => hasStarted;
+
 
     private void Awake()
     {
@@ -79,31 +79,7 @@ public class Domino : MonoBehaviour
         if (tiltAngle < revealStartAngle)
             return;
 
-        SpawnRevealWave();
-
         PaintReveal();
-    }
-
-    private void SpawnRevealWave()
-    {
-        if (waveSpawned)
-            return;
-
-        waveSpawned = true;
-
-        if (revealWavePrefab == null)
-            return;
-
-        Vector3 wavePosition = transform.position;
-
-        // Assumes ground is around Y = 0.
-        wavePosition.y = waveGroundOffset;
-
-        Instantiate(
-            revealWavePrefab,
-            wavePosition,
-            Quaternion.identity
-        );
     }
 
     private void PaintReveal()
@@ -124,10 +100,16 @@ public class Domino : MonoBehaviour
 
         RevealPainter.Instance.Paint(
             transform.position,
-            transform.forward
+            transform.forward,
+            new Vector2(
+                revealLength,
+                revealWidth
+            )
         );
 
-        lastPaintPosition = transform.position;
+        lastPaintPosition =
+            transform.position;
+
         hasPaintPosition = true;
     }
 
@@ -139,7 +121,6 @@ public class Domino : MonoBehaviour
         hasStarted = true;
 
         hasPaintPosition = false;
-        waveSpawned = false;
 
         rb.isKinematic = false;
 
@@ -249,7 +230,6 @@ public class Domino : MonoBehaviour
         destroyScheduled = false;
 
         hasPaintPosition = false;
-        waveSpawned = false;
 
         rb.isKinematic = true;
 
