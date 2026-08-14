@@ -33,19 +33,19 @@ public class ProceduralLevelGenerator : MonoBehaviour
     // BOARD
     // =========================================================
 
-    [Header("Board")]
+    //[Header("Board")]
 
-    [Tooltip("Grid width for early levels.")]
-    public int baseColumns = 18;
+    //[Tooltip("Grid width for early levels.")]
+    //public int baseColumns = 18;
 
-    [Tooltip("Grid height for early levels.")]
-    public int baseRows = 12;
+    //[Tooltip("Grid height for early levels.")]
+    //public int baseRows = 12;
 
-    [Tooltip("Maximum width of later levels.")]
-    public int maxColumns = 30;
+    //[Tooltip("Maximum width of later levels.")]
+    //public int maxColumns = 30;
 
-    [Tooltip("Maximum height of later levels.")]
-    public int maxRows = 20;
+    //[Tooltip("Maximum height of later levels.")]
+    //public int maxRows = 20;
 
     [Tooltip(
         "Keep this equal to approximately your normal domino spacing."
@@ -54,6 +54,57 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
     [Tooltip("Height of dominoes above ground.")]
     public float groundOffset = 0.5f;
+
+
+    [Header("Board Growth")]
+
+    public Transform groundTransform;
+    public Renderer groundRenderer;
+
+    public Vector2 startingGroundSize =
+        new Vector2(6f, 4f);
+
+    public Vector2 maximumGroundSize =
+        new Vector2(11f, 7f);
+
+    public int levelsPerSizeIncrease = 5;
+
+    public Vector2 sizeIncreasePerStep =
+        new Vector2(0.5f, 0.3f);
+
+
+
+    private Vector2 CalculateGroundSize()
+    {
+        int step =
+            (levelNumber - 1) /
+            levelsPerSizeIncrease;
+
+        float width =
+            startingGroundSize.x +
+            step * sizeIncreasePerStep.x;
+
+        float depth =
+            startingGroundSize.y +
+            step * sizeIncreasePerStep.y;
+
+        width =
+            Mathf.Min(
+                width,
+                maximumGroundSize.x
+            );
+
+        depth =
+            Mathf.Min(
+                depth,
+                maximumGroundSize.y
+            );
+
+        return new Vector2(
+            width,
+            depth
+        );
+    }
 
 
     // =========================================================
@@ -111,11 +162,35 @@ public class ProceduralLevelGenerator : MonoBehaviour
         if (!ValidateSettings())
             return;
 
+
+        // -------------------------------------------------
+        // LEVEL SIZE
+        // -------------------------------------------------
+
+        Vector2 groundSize =
+            CalculateGroundSize();
+
+        ResizeGround(
+            groundSize
+        );
+
+
+        // -------------------------------------------------
+        // RANDOM SEED
+        // -------------------------------------------------
+
         int seed =
             baseSeed +
             levelNumber * 7919;
 
-        Random.InitState(seed);
+        Random.InitState(
+            seed
+        );
+
+
+        // -------------------------------------------------
+        // GRID SIZE
+        // -------------------------------------------------
 
         int columns =
             CalculateColumns();
@@ -123,13 +198,36 @@ public class ProceduralLevelGenerator : MonoBehaviour
         int rows =
             CalculateRows();
 
+
+        // -------------------------------------------------
+        // GRID CENTER
+        // -------------------------------------------------
+
+        Vector3 boardCenter =
+            groundRenderer != null
+                ? groundRenderer.bounds.center
+                : transform.position;
+
+        boardCenter.y =
+            transform.position.y;
+
+
+        // -------------------------------------------------
+        // CREATE BOARD
+        // -------------------------------------------------
+
         board =
             new GridBoard(
                 columns,
                 rows,
                 cellSize,
-                transform.position
+                boardCenter
             );
+
+
+        // -------------------------------------------------
+        // GENERATE
+        // -------------------------------------------------
 
         CreateGeneratedRoot();
 
@@ -138,11 +236,13 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
         GenerateHorizontalCoverageLines();
 
+
         Debug.Log(
             $"Generated Level {levelNumber}. " +
+            $"Ground: {groundSize.x:F2} x {groundSize.y:F2}, " +
+            $"Grid: {columns} x {rows}, " +
             $"Lines: {generatedLineCount}, " +
             $"Dominoes: {generatedDominoCount}, " +
-            $"Grid: {columns} x {rows}, " +
             $"Seed: {seed}"
         );
     }
@@ -154,37 +254,27 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
     private int CalculateColumns()
     {
-        // Every 5 levels make the board slightly wider.
+        Vector2 groundSize =
+            CalculateGroundSize();
 
-        int increases =
-            (levelNumber - 1) / 5;
-
-        int columns =
-            baseColumns +
-            increases * 2;
-
-        return Mathf.Clamp(
-            columns,
-            baseColumns,
-            maxColumns
+        return Mathf.Max(
+            2,
+            Mathf.FloorToInt(
+                groundSize.x / cellSize
+            ) + 1
         );
     }
 
     private int CalculateRows()
     {
-        // Every 10 levels add more board depth.
+        Vector2 groundSize =
+            CalculateGroundSize();
 
-        int increases =
-            (levelNumber - 1) / 10;
-
-        int rows =
-            baseRows +
-            increases * 2;
-
-        return Mathf.Clamp(
-            rows,
-            baseRows,
-            maxRows
+        return Mathf.Max(
+            2,
+            Mathf.FloorToInt(
+                groundSize.y / cellSize
+            ) + 1
         );
     }
 
@@ -260,6 +350,53 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 lineIndex++;
             }
         }
+    }
+
+
+    private void ResizeGround(Vector2 targetSize)
+    {
+        if (groundTransform == null ||
+            groundRenderer == null)
+        {
+            Debug.LogError(
+                "Ground Transform or Ground Renderer is missing."
+            );
+
+            return;
+        }
+
+        Bounds bounds =
+            groundRenderer.bounds;
+
+        float currentWidth =
+            bounds.size.x;
+
+        float currentDepth =
+            bounds.size.z;
+
+        if (currentWidth <= 0.001f ||
+            currentDepth <= 0.001f)
+        {
+            Debug.LogError(
+                "Ground has invalid dimensions."
+            );
+
+            return;
+        }
+
+        Vector3 scale =
+            groundTransform.localScale;
+
+        scale.x *=
+            targetSize.x /
+            currentWidth;
+
+        scale.z *=
+            targetSize.y /
+            currentDepth;
+
+        groundTransform.localScale =
+            scale;
     }
 
 
@@ -473,54 +610,85 @@ public class ProceduralLevelGenerator : MonoBehaviour
         if (dominoPrefab == null)
         {
             Debug.LogError(
-                "ProceduralLevelGenerator: " +
-                "Domino Prefab is missing."
+                "ProceduralLevelGenerator: Domino Prefab is missing."
             );
 
             return false;
         }
-
 
         if (linePrefab == null)
         {
             Debug.LogError(
-                "ProceduralLevelGenerator: " +
-                "Line Prefab is missing."
+                "ProceduralLevelGenerator: Line Prefab is missing."
             );
 
             return false;
         }
 
-
-        if (baseColumns < 2)
+        if (groundTransform == null)
         {
             Debug.LogError(
-                "Base Columns must be at least 2."
+                "ProceduralLevelGenerator: Ground Transform is missing."
             );
 
             return false;
         }
 
-
-        if (baseRows < 1)
+        if (groundRenderer == null)
         {
             Debug.LogError(
-                "Base Rows must be at least 1."
+                "ProceduralLevelGenerator: Ground Renderer is missing."
             );
 
             return false;
         }
-
 
         if (cellSize <= 0f)
         {
             Debug.LogError(
-                "Cell Size must be greater than zero."
+                "ProceduralLevelGenerator: Cell Size must be greater than zero."
             );
 
             return false;
         }
 
+        if (startingGroundSize.x <= 0f ||
+            startingGroundSize.y <= 0f)
+        {
+            Debug.LogError(
+                "ProceduralLevelGenerator: Starting Ground Size must be greater than zero."
+            );
+
+            return false;
+        }
+
+        if (maximumGroundSize.x < startingGroundSize.x ||
+            maximumGroundSize.y < startingGroundSize.y)
+        {
+            Debug.LogError(
+                "ProceduralLevelGenerator: Maximum Ground Size must be bigger than Starting Ground Size."
+            );
+
+            return false;
+        }
+
+        if (levelsPerSizeIncrease <= 0)
+        {
+            Debug.LogError(
+                "ProceduralLevelGenerator: Levels Per Size Increase must be greater than zero."
+            );
+
+            return false;
+        }
+
+        if (rowSpacing <= 0)
+        {
+            Debug.LogError(
+                "ProceduralLevelGenerator: Row Spacing must be at least 1."
+            );
+
+            return false;
+        }
 
         return true;
     }
