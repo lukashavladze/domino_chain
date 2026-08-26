@@ -3,6 +3,21 @@ using UnityEngine;
 
 public class ProceduralLevelGenerator : MonoBehaviour
 {
+
+    private enum LineDirection
+    {
+        LeftToRight,
+        RightToLeft,
+
+        BottomToTop,
+        TopToBottom,
+
+        BottomLeftToTopRight,
+        TopRightToBottomLeft,
+
+        TopLeftToBottomRight,
+        BottomRightToTopLeft
+    }
     // =========================================================
     // LEVEL
     // =========================================================
@@ -40,6 +55,13 @@ public class ProceduralLevelGenerator : MonoBehaviour
     [Tooltip("Distance between neighboring domino grid positions.")]
     [Min(0.01f)]
     public float cellSize = 0.25f;
+
+    [Header("Reveal Coverage")]
+
+    [Tooltip("Extra reveal size beyond one grid cell.")]
+    [Min(0f)]
+    [SerializeField]
+    private float revealOverlap = 0.15f;
 
     [Tooltip("Height of domino pivot above the ground.")]
     public float groundOffset = 0.5f;
@@ -94,6 +116,28 @@ public class ProceduralLevelGenerator : MonoBehaviour
     [Min(1)]
     [SerializeField]
     private int rowSpacing = 2;
+
+    [Header("Direction Generation")]
+
+    [Range(0f, 1f)]
+    [SerializeField]
+    private float targetBoardFill = 0.75f;
+
+    [Min(10)]
+    [SerializeField]
+    private int maxLineGenerationAttempts = 500;
+
+    [Tooltip("Allow horizontal lines.")]
+    [SerializeField]
+    private bool allowHorizontalLines = true;
+
+    [Tooltip("Allow vertical lines.")]
+    [SerializeField]
+    private bool allowVerticalLines = true;
+
+    [Tooltip("Allow 45 degree diagonal lines.")]
+    [SerializeField]
+    private bool allowDiagonalLines = true;
 
 
     // =========================================================
@@ -265,7 +309,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
         // CREATE GUARANTEED-SOLVABLE DEPENDENCIES
         // -----------------------------------------------------
 
-        GenerateDependencies();
+        //GenerateDependencies();
 
 
         // -----------------------------------------------------
@@ -281,6 +325,8 @@ public class ProceduralLevelGenerator : MonoBehaviour
             $"Seed {seed}"
         );
     }
+
+   
 
 
     // =========================================================
@@ -438,32 +484,262 @@ public class ProceduralLevelGenerator : MonoBehaviour
     {
         int lineIndex = 0;
 
+        int totalCells =
+            board.Width * board.Height;
 
-        for (
-            int y = 0;
-            y < board.Height;
-            y += rowSpacing)
+        int targetOccupiedCells =
+            Mathf.RoundToInt(
+                totalCells * targetBoardFill
+            );
+
+        int occupiedCells = 0;
+
+        int attempts = 0;
+
+        while (
+            occupiedCells < targetOccupiedCells &&
+            attempts < maxLineGenerationAttempts)
         {
-            // Random direction per row.
-            bool leftToRight =
-                Random.value >= 0.5f;
+            attempts++;
 
+            LineDirection direction =
+                GetRandomLineDirection();
 
-            if (leftToRight)
-            {
-                GenerateRowLeftToRight(
-                    y,
-                    ref lineIndex
+            Vector2Int step =
+                GetDirectionStep(direction);
+
+            int desiredLength =
+                Random.Range(
+                    minDominoesPerLine,
+                    maxDominoesPerLine + 1
                 );
+
+            Vector2Int startCell =
+                GetRandomStartCell();
+
+            List<Vector2Int> path =
+                TryCreateStraightPath(
+                    startCell,
+                    step,
+                    desiredLength
+                );
+
+            if (path == null ||
+                path.Count < 2)
+            {
+                continue;
             }
-            else
-            {
-                GenerateRowRightToLeft(
-                    y,
-                    ref lineIndex
+
+            DominoLine line =
+                CreateProceduralLine(
+                    path,
+                    lineIndex
                 );
+
+            if (line == null)
+                continue;
+
+            generatedLines.Add(line);
+
+            lineIndex++;
+
+            occupiedCells +=
+                path.Count;
+        }
+
+        Debug.Log(
+            $"Straight path generation complete. " +
+            $"Occupied {occupiedCells}/{totalCells} cells. " +
+            $"Attempts: {attempts}"
+        );
+    }
+
+    private LineDirection GetRandomLineDirection()
+    {
+        List<LineDirection> available =
+            new List<LineDirection>();
+
+        if (allowHorizontalLines)
+        {
+            available.Add(
+                LineDirection.LeftToRight
+            );
+
+            available.Add(
+                LineDirection.RightToLeft
+            );
+        }
+
+        if (allowVerticalLines)
+        {
+            available.Add(
+                LineDirection.BottomToTop
+            );
+
+            available.Add(
+                LineDirection.TopToBottom
+            );
+        }
+
+        if (allowDiagonalLines)
+        {
+            available.Add(
+                LineDirection.BottomLeftToTopRight
+            );
+
+            available.Add(
+                LineDirection.TopRightToBottomLeft
+            );
+
+            available.Add(
+                LineDirection.TopLeftToBottomRight
+            );
+
+            available.Add(
+                LineDirection.BottomRightToTopLeft
+            );
+        }
+
+        if (available.Count == 0)
+        {
+            return LineDirection.LeftToRight;
+        }
+
+        return available[
+            Random.Range(
+                0,
+                available.Count
+            )
+        ];
+    }
+
+    private Vector2Int GetDirectionStep(
+    LineDirection direction)
+    {
+        switch (direction)
+        {
+            case LineDirection.LeftToRight:
+                return new Vector2Int(1, 0);
+
+            case LineDirection.RightToLeft:
+                return new Vector2Int(-1, 0);
+
+            case LineDirection.BottomToTop:
+                return new Vector2Int(0, 1);
+
+            case LineDirection.TopToBottom:
+                return new Vector2Int(0, -1);
+
+            case LineDirection.BottomLeftToTopRight:
+                return new Vector2Int(1, 1);
+
+            case LineDirection.TopRightToBottomLeft:
+                return new Vector2Int(-1, -1);
+
+            case LineDirection.TopLeftToBottomRight:
+                return new Vector2Int(1, -1);
+
+            case LineDirection.BottomRightToTopLeft:
+                return new Vector2Int(-1, 1);
+        }
+
+        return Vector2Int.right;
+    }
+
+    private Vector2Int GetRandomStartCell()
+    {
+        const int attempts = 30;
+
+        for (int i = 0; i < attempts; i++)
+        {
+            Vector2Int cell =
+                new Vector2Int(
+                    Random.Range(0, board.Width),
+                    Random.Range(0, board.Height)
+                );
+
+            if (IsCellClearFromOtherLines(
+                    cell,
+                    segmentGapCells))
+            {
+                return cell;
             }
         }
+
+        return new Vector2Int(
+            Random.Range(0, board.Width),
+            Random.Range(0, board.Height)
+        );
+    }
+
+    private List<Vector2Int> TryCreateStraightPath(
+    Vector2Int start,
+    Vector2Int step,
+    int desiredLength)
+    {
+        List<Vector2Int> path =
+            new List<Vector2Int>();
+
+        Vector2Int current =
+            start;
+
+        for (int i = 0; i < desiredLength; i++)
+        {
+            // Outside board.
+            if (!board.IsInside(current))
+                break;
+
+            // IMPORTANT:
+            // Keep distance from every PREVIOUS line.
+            if (!IsCellClearFromOtherLines(
+                    current,
+                    segmentGapCells))
+            {
+                break;
+            }
+
+            path.Add(current);
+
+            current += step;
+        }
+
+        // Don't create tiny useless lines.
+        if (path.Count < minDominoesPerLine)
+            return null;
+
+        return path;
+    }
+
+
+    private bool IsCellClearFromOtherLines(
+    Vector2Int cell,
+    int gap)
+    {
+        // Never allow the exact occupied cell.
+        if (board.IsOccupied(cell))
+            return false;
+
+        // Check surrounding cells.
+        for (int x = -gap; x <= gap; x++)
+        {
+            for (int y = -gap; y <= gap; y++)
+            {
+                Vector2Int nearby =
+                    new Vector2Int(
+                        cell.x + x,
+                        cell.y + y
+                    );
+
+                // Outside board does not matter here.
+                if (!board.IsInside(nearby))
+                    continue;
+
+                if (board.IsOccupied(nearby))
+                    return false;
+            }
+        }
+
+        return true;
     }
 
 
@@ -709,7 +985,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
         // Procedural levels use generated dependencies.
         // -----------------------------------------------------
 
-        line.useGeneratedBlocking = true;
+        line.useGeneratedBlocking = false;
 
         line.blockedByLines.Clear();
 
@@ -753,6 +1029,10 @@ public class ProceduralLevelGenerator : MonoBehaviour
                     dominoPrefab,
                     line.transform
                 );
+
+            domino.SetRevealSize(
+    cellSize + revealOverlap
+);
 
 
             domino.name =

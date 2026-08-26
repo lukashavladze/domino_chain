@@ -26,8 +26,8 @@ public class Domino : MonoBehaviour
     public float fadeDuration = 0.3f;
 
     [Header("Reveal Footprint")]
-    [SerializeField] private float revealLength = 0.35f;
-    [SerializeField] private float revealWidth = 0.25f;
+    [SerializeField] private float revealLength = 0.65f;
+    [SerializeField] private float revealWidth = 0.65f;
 
     private Rigidbody rb;
 
@@ -37,6 +37,7 @@ public class Domino : MonoBehaviour
     private Vector3 originalScale;
     private Vector3 originalPosition;
     private Vector3 originalForward;
+    private Quaternion originalRotation;
 
 
     public bool HasStarted => hasStarted;
@@ -48,6 +49,7 @@ public class Domino : MonoBehaviour
 
         originalScale = transform.localScale;
         originalPosition = transform.position;
+        originalRotation = transform.rotation;
         originalForward = transform.forward;
     }
 
@@ -64,6 +66,14 @@ public class Domino : MonoBehaviour
         return angle <= standingAngle;
     }
 
+
+    public void SetRevealSize(float size)
+    {
+        revealLength = size;
+        revealWidth = size;
+    }
+
+
     private void PaintOriginalFootprint()
     {
         if (RevealPainter.Instance == null)
@@ -79,6 +89,7 @@ public class Domino : MonoBehaviour
         );
     }
 
+    
 
     public void Fall(Vector3 direction)
     {
@@ -208,7 +219,8 @@ public class Domino : MonoBehaviour
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
 
-        transform.localRotation = Quaternion.identity;
+        transform.position = originalPosition;
+        transform.rotation = originalRotation;
         transform.localScale = originalScale;
     }
 }

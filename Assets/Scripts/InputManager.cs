@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using System;
 
 public class InputManager : MonoBehaviour
 {
@@ -36,34 +37,47 @@ public class InputManager : MonoBehaviour
 
     void TryHit(Vector2 screenPosition)
     {
-        Ray ray =
-            cam.ScreenPointToRay(screenPosition);
+        Ray ray = cam.ScreenPointToRay(screenPosition);
 
-        if (!Physics.Raycast(
-                ray,
-                out RaycastHit hit))
+        RaycastHit[] hits = Physics.RaycastAll(ray);
+
+        if (hits == null || hits.Length == 0)
+            return;
+
+        // RaycastAll does not guarantee distance order.
+        Array.Sort(
+            hits,
+            (a, b) => a.distance.CompareTo(b.distance)
+        );
+
+        foreach (RaycastHit hit in hits)
         {
-            return;
+            Domino domino =
+                hit.collider.GetComponentInParent<Domino>();
+
+            if (domino == null)
+                continue;
+
+            // Ignore dominoes already falling / fallen.
+            if (domino.HasStarted)
+                continue;
+
+            // Ignore dominoes that are no longer standing.
+            if (!domino.IsStanding())
+                continue;
+
+            DominoLine line = domino.ownerLine;
+
+            if (line == null)
+                continue;
+
+            // Only first domino starts a line.
+            if (domino != line.firstDomino)
+                continue;
+
+            // TryStartLine performs the final blocking check.
+            if (line.TryStartLine())
+                return;
         }
-
-        Domino domino =
-            hit.collider.GetComponentInParent<Domino>();
-
-        if (domino == null)
-            return;
-
-        DominoLine line =
-            domino.ownerLine;
-
-        if (line == null)
-            return;
-
-        // Only the FIRST domino is allowed to be clicked.
-        if (domino != line.firstDomino)
-            return;
-
-        // This safely checks blocking/state at the exact
-        // moment the player clicks.
-        line.TryStartLine();
     }
 }
