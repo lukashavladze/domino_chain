@@ -7,12 +7,15 @@ public class DominoLine : MonoBehaviour
     public Domino firstDomino;
     public List<Domino> dominoes = new();
 
-    [Header("Arrow-Style Blocking")]
-    [Tooltip("How far in front of the final domino we check.")]
-    public float blockerCheckDistance = 0.28f;
+    [Header("Physical Blocking")]
 
-    [Tooltip("Radius used to detect another standing domino.")]
-    public float blockerCheckRadius = 0.14f;
+    [Tooltip("Multiplier for how far the last domino can reach when falling.")]
+    [Range(0.5f, 1.5f)]
+    public float fallReachMultiplier = 1.0f;
+
+    [Tooltip("Extra width added to the falling collision check.")]
+    [Range(0f, 0.3f)]
+    public float fallCheckPadding = 0.05f;
 
     public LayerMask blockerMask = ~0;
 
@@ -197,17 +200,11 @@ public class DominoLine : MonoBehaviour
             return false;
         }
 
-
         Domino last =
-            dominoes[
-                dominoes.Count - 1
-            ];
+            dominoes[dominoes.Count - 1];
 
         Domino previous =
-            dominoes[
-                dominoes.Count - 2
-            ];
-
+            dominoes[dominoes.Count - 2];
 
         if (last == null ||
             previous == null)
@@ -215,68 +212,93 @@ public class DominoLine : MonoBehaviour
             return false;
         }
 
-
         Vector3 direction =
             last.transform.position -
             previous.transform.position;
 
-
         direction.y = 0f;
 
-
-        if (direction.sqrMagnitude <
-            0.001f)
-        {
+        if (direction.sqrMagnitude < 0.001f)
             return false;
-        }
-
 
         direction.Normalize();
 
+        // -------------------------------------------------
+        // Approximate the space the LAST domino occupies
+        // while falling forward.
+        // -------------------------------------------------
 
-        Vector3 checkPosition =
+        Collider lastCollider =
+            last.GetComponentInChildren<Collider>();
+
+        if (lastCollider == null)
+            return false;
+
+        Bounds bounds =
+            lastCollider.bounds;
+
+        // Domino height becomes approximately its forward
+        // reach when it falls.
+        float fallReach =
+     bounds.size.y *
+     fallReachMultiplier;
+
+        // Thickness / width of the domino.
+        float halfWidth =
+    Mathf.Max(
+        bounds.extents.x,
+        bounds.extents.z
+    ) +
+    fallCheckPadding;
+
+        // Start slightly in front of the last domino.
+        Vector3 start =
             last.transform.position +
-            direction *
-            blockerCheckDistance;
+            direction * 0.05f;
 
+        // End where the top of the domino would roughly land.
+        Vector3 end =
+            last.transform.position +
+            direction * fallReach;
+
+        // Keep check near the center height of possible collision.
+        float checkHeight =
+            last.transform.position.y;
+
+        start.y = checkHeight;
+        end.y = checkHeight;
 
         Collider[] hits =
-            Physics.OverlapSphere(
-                checkPosition,
-                blockerCheckRadius,
+            Physics.OverlapCapsule(
+                start,
+                end,
+                halfWidth,
                 blockerMask,
                 QueryTriggerInteraction.Ignore
             );
-
 
         foreach (Collider hit in hits)
         {
             Domino other =
                 hit.GetComponentInParent<Domino>();
 
-
             if (other == null)
                 continue;
 
-
-            // Same line is never a blocker.
+            // Ignore our own line.
             if (other.ownerLine == this)
                 continue;
 
-
-            // Already falling/disappearing does not block.
+            // Ignore dominoes that already started.
             if (other.HasStarted)
                 continue;
 
-
-            // Fallen domino does not block.
+            // Only standing dominoes count.
             if (!other.IsStanding())
                 continue;
 
-
             return true;
         }
-
 
         return false;
     }
@@ -305,35 +327,35 @@ public class DominoLine : MonoBehaviour
         RefreshAvailability();
     }
 
-    private void OnDrawGizmosSelected()
-    {
-        if (dominoes == null || dominoes.Count < 2)
-            return;
+    //private void OnDrawGizmosSelected()
+    //{
+    //    if (dominoes == null || dominoes.Count < 2)
+    //        return;
 
-        Domino last = dominoes[dominoes.Count - 1];
-        Domino previous = dominoes[dominoes.Count - 2];
+    //    Domino last = dominoes[dominoes.Count - 1];
+    //    Domino previous = dominoes[dominoes.Count - 2];
 
-        if (last == null || previous == null)
-            return;
+    //    if (last == null || previous == null)
+    //        return;
 
-        Vector3 direction =
-            last.transform.position -
-            previous.transform.position;
+    //    Vector3 direction =
+    //        last.transform.position -
+    //        previous.transform.position;
 
-        direction.y = 0;
+    //    direction.y = 0;
 
-        if (direction.sqrMagnitude < 0.001f)
-            return;
+    //    if (direction.sqrMagnitude < 0.001f)
+    //        return;
 
-        direction.Normalize();
+    //    direction.Normalize();
 
-        Vector3 checkPosition =
-            last.transform.position +
-            direction * blockerCheckDistance;
+    //    Vector3 checkPosition =
+    //        last.transform.position +
+    //        direction * blockerCheckDistance;
 
-        Gizmos.DrawWireSphere(
-            checkPosition,
-            blockerCheckRadius
-        );
-    }
+    //    Gizmos.DrawWireSphere(
+    //        checkPosition,
+    //        blockerCheckRadius
+    //    );
+    //}
 }

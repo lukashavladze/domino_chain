@@ -51,6 +51,14 @@ public class Domino : MonoBehaviour
         originalPosition = transform.position;
         originalRotation = transform.rotation;
         originalForward = transform.forward;
+
+        // IMPORTANT:
+        // Standing dominoes must never be knocked down
+        // by physics from another line.
+        rb.isKinematic = true;
+
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
     }
 
     public bool IsStanding()
