@@ -154,15 +154,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Domino
   ownerLine: {fileID: 0}
-  dominoRenderer: {fileID: 0}
-  firstDominoColor: {r: 0.15, g: 1, b: 0.25, a: 1}
   standingAngle: 20
-  revealWavePrefab: {fileID: 84316403871001328, guid: 68336bdff6398044f8c66181219abca4, type: 3}
-  waveGroundOffset: 0.03
   nextDominoes: []
   canStartChain: 0
   pushForce: 2
-  nextDelay: 0.03
+  nextDelay: 0.08
   fadeDuration: 0.01
-  revealPaintDistance: 0.08
-  revealStartAngle: 45
+  revealLength: 0.35
+  revealWidth: 0.25

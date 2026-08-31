@@ -19,8 +19,8 @@ public class Domino : MonoBehaviour
     public bool canStartChain;
 
     [Header("Settings")]
-    public float pushForce = 2f;
-    public float nextDelay = 0.08f;
+    public float pushForce = 1.5f;
+    public float nextDelay = 0.12f;
 
     [Header("Cleanup")]
     public float fadeDuration = 0.3f;

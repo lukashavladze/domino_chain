@@ -158,9 +158,7 @@ MonoBehaviour:
   nextDominoes: []
   canStartChain: 1
   pushForce: 2
-  nextDelay: 0.03
+  nextDelay: 0.08
   fadeDuration: 0.01
-  revealPaintDistance: 0.08
-  revealStartAngle: 45
   revealLength: 0.4
   revealWidth: 0.5
