@@ -154,7 +154,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Domino
   ownerLine: {fileID: 0}
-  standingAngle: 20
+  standingAngle: 30
   nextDominoes: []
   canStartChain: 1
   pushForce: 2
