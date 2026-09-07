@@ -2,9 +2,9 @@ Shader "Custom/SimpleRevealGround"
 {
     Properties
     {
+        _BoardTexture ("Board Texture", 2D) = "white" {}
         _MainTexture ("Hidden Image", 2D) = "white" {}
         _RevealMask ("Reveal Mask", 2D) = "black" {}
-        _CoverColor ("Cover Color", Color) = (0,0,0,1)
     }
 
     SubShader
@@ -27,6 +27,9 @@ Shader "Custom/SimpleRevealGround"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
+            TEXTURE2D(_BoardTexture);
+            SAMPLER(sampler_BoardTexture);
+
             TEXTURE2D(_MainTexture);
             SAMPLER(sampler_MainTexture);
 
@@ -35,10 +38,9 @@ Shader "Custom/SimpleRevealGround"
 
             CBUFFER_START(UnityPerMaterial)
 
+                float4 _BoardTexture_ST;
                 float4 _MainTexture_ST;
                 float4 _RevealMask_ST;
-
-                float4 _CoverColor;
 
             CBUFFER_END
 
@@ -59,16 +61,43 @@ Shader "Custom/SimpleRevealGround"
                 Varyings output;
 
                 VertexPositionInputs positions =
-                    GetVertexPositionInputs(input.positionOS.xyz);
+                    GetVertexPositionInputs(
+                        input.positionOS.xyz
+                    );
 
-                output.positionCS = positions.positionCS;
-                output.uv = input.uv;
+                output.positionCS =
+                    positions.positionCS;
+
+                output.uv =
+                    input.uv;
 
                 return output;
             }
 
             half4 frag(Varyings input) : SV_Target
             {
+                // -----------------------------------------
+                // BOARD
+                // -----------------------------------------
+
+                float2 boardUV =
+                    TRANSFORM_TEX(
+                        input.uv,
+                        _BoardTexture
+                    );
+
+                float3 boardColor =
+                    SAMPLE_TEXTURE2D(
+                        _BoardTexture,
+                        sampler_BoardTexture,
+                        boardUV
+                    ).rgb;
+
+
+                // -----------------------------------------
+                // HIDDEN IMAGE
+                // -----------------------------------------
+
                 float2 imageUV =
                     TRANSFORM_TEX(
                         input.uv,
@@ -82,6 +111,11 @@ Shader "Custom/SimpleRevealGround"
                         imageUV
                     ).rgb;
 
+
+                // -----------------------------------------
+                // REVEAL MASK
+                // -----------------------------------------
+
                 float reveal =
                     SAMPLE_TEXTURE2D(
                         _RevealMask,
@@ -89,16 +123,26 @@ Shader "Custom/SimpleRevealGround"
                         input.uv
                     ).r;
 
-                reveal = saturate(reveal);
+                reveal =
+                    saturate(reveal);
+
+
+                // -----------------------------------------
+                // FINAL BLEND
+                // -----------------------------------------
 
                 float3 finalColor =
                     lerp(
-                        _CoverColor.rgb,
+                        boardColor,
                         imageColor,
                         reveal
                     );
 
-                return half4(finalColor, 1);
+
+                return half4(
+                    finalColor,
+                    1
+                );
             }
 
             ENDHLSL
