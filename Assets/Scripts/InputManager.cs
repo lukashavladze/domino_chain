@@ -4,80 +4,160 @@ using System;
 
 public class InputManager : MonoBehaviour
 {
-    Camera cam;
+    private Camera cam;
 
-    void Awake()
+
+    private void Awake()
     {
         cam = Camera.main;
     }
 
-    void Update()
+
+    private void Update()
     {
+        // No gameplay input after Game Over.
+        if (GameManager.Instance != null &&
+            GameManager.Instance.IsGameOver)
+        {
+            return;
+        }
+
+
         if (cam == null)
             return;
 
-        // Mouse
+
+        // ================================
+        // MOUSE
+        // ================================
+
         if (Mouse.current != null &&
             Mouse.current.leftButton.wasPressedThisFrame)
         {
-            TryHit(Mouse.current.position.ReadValue());
+            TryHit(
+                Mouse.current.position.ReadValue()
+            );
         }
 
-        // Touch
+
+        // ================================
+        // TOUCH
+        // ================================
+
         if (Touchscreen.current != null)
         {
-            var touch = Touchscreen.current.primaryTouch;
+            var touch =
+                Touchscreen.current.primaryTouch;
 
             if (touch.press.wasPressedThisFrame)
             {
-                TryHit(touch.position.ReadValue());
+                TryHit(
+                    touch.position.ReadValue()
+                );
             }
         }
     }
 
-    void TryHit(Vector2 screenPosition)
+
+    private void TryHit(Vector2 screenPosition)
     {
-        Ray ray = cam.ScreenPointToRay(screenPosition);
+        Ray ray =
+            cam.ScreenPointToRay(
+                screenPosition
+            );
 
-        RaycastHit[] hits = Physics.RaycastAll(ray);
 
-        if (hits == null || hits.Length == 0)
+        RaycastHit[] hits =
+            Physics.RaycastAll(ray);
+
+
+        if (hits == null ||
+            hits.Length == 0)
+        {
             return;
+        }
+
 
         // RaycastAll does not guarantee distance order.
         Array.Sort(
             hits,
-            (a, b) => a.distance.CompareTo(b.distance)
+            (a, b) =>
+                a.distance.CompareTo(
+                    b.distance
+                )
         );
+
 
         foreach (RaycastHit hit in hits)
         {
             Domino domino =
-                hit.collider.GetComponentInParent<Domino>();
+                hit.collider
+                    .GetComponentInParent<Domino>();
+
 
             if (domino == null)
                 continue;
 
-            // Ignore dominoes already falling / fallen.
+
+            // Ignore dominoes that already started.
             if (domino.HasStarted)
                 continue;
+
 
             // Ignore dominoes that are no longer standing.
             if (!domino.IsStanding())
                 continue;
 
-            DominoLine line = domino.ownerLine;
+
+            DominoLine line =
+                domino.ownerLine;
+
 
             if (line == null)
                 continue;
 
-            // Only first domino starts a line.
-            if (domino != line.firstDomino)
-                continue;
 
-            // TryStartLine performs the final blocking check.
-            if (line.TryStartLine())
+            // ==========================================
+            // ONLY STARTER DOMINOES ARE GAMEPLAY INPUT
+            // ==========================================
+
+            if (domino != line.firstDomino)
+            {
                 return;
+            }
+
+
+            // ==========================================
+            // ATTEMPT TO START THIS LINE
+            // ==========================================
+
+            bool started =
+                line.TryStartLine();
+
+
+            if (started)
+            {
+                // Correct move.
+                return;
+            }
+
+
+            // ==========================================
+            // WRONG MOVE
+            // ==========================================
+            //
+            // Player clicked a valid starter domino,
+            // but the line is currently blocked.
+            //
+
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance
+                    .RegisterWrongMove();
+            }
+
+
+            return;
         }
     }
 }
