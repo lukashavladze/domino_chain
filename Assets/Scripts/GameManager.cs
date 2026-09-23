@@ -19,6 +19,10 @@ public class GameManager : MonoBehaviour
     public int MaximumLives => maximumLives;
     public bool IsGameOver => gameOver;
 
+    private bool continueUsed;
+
+    public bool ContinueUsed => continueUsed;
+
 
     private void Awake()
     {
@@ -52,10 +56,12 @@ public class GameManager : MonoBehaviour
         currentLives = maximumLives;
 
         gameOver = false;
+        continueUsed = false;
 
         if (gameUI != null)
         {
             gameUI.SetLives(currentLives);
+            gameUI.HideGameOver();
         }
     }
 
@@ -108,8 +114,33 @@ public class GameManager : MonoBehaviour
 
         Debug.Log("GAME OVER");
 
-        // Step 2:
-        // Game Over panel will be shown here.
+        if (gameUI != null)
+        {
+            gameUI.ShowGameOver(!continueUsed);
+        }
+    }
+
+    public void ContinueGame()
+    {
+        if (!gameOver)
+            return;
+
+        if (continueUsed)
+            return;
+
+        continueUsed = true;
+
+        // Continue with exactly 1 life.
+        currentLives = 1;
+        gameOver = false;
+
+        if (gameUI != null)
+        {
+            gameUI.SetLives(currentLives);
+            gameUI.HideGameOver();
+        }
+
+        Debug.Log("CONTINUED | Lives remaining: 1");
     }
 
 

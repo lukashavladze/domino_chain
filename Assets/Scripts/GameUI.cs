@@ -10,11 +10,25 @@ public class GameUI : MonoBehaviour
     [SerializeField] private Sprite fullLifeSprite;
     [SerializeField] private Sprite emptyLifeSprite;
 
+
+    [Header("Game Over")]
+    [SerializeField] private GameObject gameOverPanel;
+
+
     [Header("Mistake Feedback")]
     [SerializeField] private float pulseScale = 1.3f;
     [SerializeField] private float pulseDuration = 0.15f;
 
+
+
+
     private Coroutine feedbackCoroutine;
+
+    [SerializeField] private Button continueButton;
+
+    // ==========================================
+    // LIVES
+    // ==========================================
 
     public void SetLives(int currentLives)
     {
@@ -30,6 +44,7 @@ public class GameUI : MonoBehaviour
         }
     }
 
+
     public void PlayMistakeFeedback(int lostLifeIndex)
     {
         if (lostLifeIndex < 0 ||
@@ -38,37 +53,107 @@ public class GameUI : MonoBehaviour
             return;
         }
 
-        Image target = lifeImages[lostLifeIndex];
+        Image target =
+            lifeImages[lostLifeIndex];
 
         if (target == null)
             return;
 
+
         if (feedbackCoroutine != null)
-            StopCoroutine(feedbackCoroutine);
+        {
+            StopCoroutine(
+                feedbackCoroutine
+            );
+        }
+
 
         feedbackCoroutine =
-            StartCoroutine(PulseLife(target.rectTransform));
+            StartCoroutine(
+                PulseLife(
+                    target.rectTransform
+                )
+            );
     }
 
-    private IEnumerator PulseLife(RectTransform target)
+
+    // ==========================================
+    // GAME OVER
+    // ==========================================
+
+    public void HideGameOver()
     {
-        Vector3 originalScale = Vector3.one;
+        if (gameOverPanel != null)
+        {
+            gameOverPanel.SetActive(false);
+        }
+    }
+
+
+    // ==========================================
+    // BUTTONS
+    // ==========================================
+
+    public void OnContinuePressed()
+    {
+        if (GameManager.Instance == null)
+            return;
+
+        GameManager.Instance.ContinueGame();
+    }
+
+
+    public void OnRestartPressed()
+    {
+        if (GameManager.Instance == null)
+            return;
+
+        GameManager.Instance.RestartLevel();
+    }
+
+    public void ShowGameOver(bool canContinue)
+    {
+        if (gameOverPanel != null)
+            gameOverPanel.SetActive(true);
+
+        if (continueButton != null)
+            continueButton.interactable = canContinue;
+    }
+
+
+    // ==========================================
+    // HEART ANIMATION
+    // ==========================================
+
+    private IEnumerator PulseLife(
+        RectTransform target
+    )
+    {
+        Vector3 originalScale =
+            Vector3.one;
+
         Vector3 enlargedScale =
             Vector3.one * pulseScale;
+
 
         float halfDuration =
             pulseDuration * 0.5f;
 
+
         float timer = 0f;
+
 
         while (timer < halfDuration)
         {
-            timer += Time.unscaledDeltaTime;
+            timer +=
+                Time.unscaledDeltaTime;
+
 
             float t =
                 Mathf.Clamp01(
                     timer / halfDuration
                 );
+
 
             target.localScale =
                 Vector3.Lerp(
@@ -77,19 +162,25 @@ public class GameUI : MonoBehaviour
                     t
                 );
 
+
             yield return null;
         }
+
 
         timer = 0f;
 
+
         while (timer < halfDuration)
         {
-            timer += Time.unscaledDeltaTime;
+            timer +=
+                Time.unscaledDeltaTime;
+
 
             float t =
                 Mathf.Clamp01(
                     timer / halfDuration
                 );
+
 
             target.localScale =
                 Vector3.Lerp(
@@ -98,10 +189,13 @@ public class GameUI : MonoBehaviour
                     t
                 );
 
+
             yield return null;
         }
 
-        target.localScale = originalScale;
+
+        target.localScale =
+            originalScale;
 
         feedbackCoroutine = null;
     }
