@@ -32,7 +32,7 @@ public class Domino : MonoBehaviour
     private Rigidbody rb;
 
     private bool hasStarted;
-    private bool destroyScheduled;
+    private bool fadeScheduled;
 
     private Vector3 originalScale;
     private Vector3 originalPosition;
@@ -114,10 +114,10 @@ public class Domino : MonoBehaviour
             ForceMode.Impulse
         );
 
-        if (!destroyScheduled)
+        if (!fadeScheduled)
         {
-            destroyScheduled = true;
-            StartCoroutine(FadeAndDestroy());
+            fadeScheduled = true;
+            StartCoroutine(FadeOut());
         }
 
         CancelInvoke(nameof(TriggerNext));
@@ -169,18 +169,15 @@ public class Domino : MonoBehaviour
         }
     }
 
-    private IEnumerator FadeAndDestroy()
+    private IEnumerator FadeOut()
     {
         yield return new WaitForSeconds(1f);
 
-        // Reveal when this domino starts fading away.
+        // Reveal the image underneath this domino.
         PaintOriginalFootprint();
 
-        Vector3 startScale =
-            transform.localScale;
-
-        Vector3 startPosition =
-            transform.position;
+        Vector3 startScale = transform.localScale;
+        Vector3 startPosition = transform.position;
 
         float timer = 0f;
 
@@ -188,30 +185,32 @@ public class Domino : MonoBehaviour
         {
             timer += Time.deltaTime;
 
-            float t =
-                Mathf.Clamp01(
-                    timer / fadeDuration
-                );
+            float t = Mathf.Clamp01(
+                timer / fadeDuration
+            );
 
-            transform.localScale =
-                Vector3.Lerp(
-                    startScale,
-                    Vector3.zero,
-                    t
-                );
+            transform.localScale = Vector3.Lerp(
+                startScale,
+                Vector3.zero,
+                t
+            );
 
-            transform.position =
-                Vector3.Lerp(
-                    startPosition,
-                    startPosition +
-                    Vector3.down * 0.1f,
-                    t
-                );
+            transform.position = Vector3.Lerp(
+                startPosition,
+                startPosition + Vector3.down * 0.1f,
+                t
+            );
 
             yield return null;
         }
 
-        Destroy(gameObject);
+        // DON'T Destroy(gameObject).
+
+        transform.localScale = Vector3.zero;
+
+        rb.isKinematic = true;
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
     }
 
     public void ResetDomino()
@@ -220,7 +219,7 @@ public class Domino : MonoBehaviour
         CancelInvoke();
 
         hasStarted = false;
-        destroyScheduled = false;
+        fadeScheduled = false;
 
         rb.isKinematic = true;
 
@@ -230,5 +229,7 @@ public class Domino : MonoBehaviour
         transform.position = originalPosition;
         transform.rotation = originalRotation;
         transform.localScale = originalScale;
+
+        gameObject.SetActive(true);
     }
 }
