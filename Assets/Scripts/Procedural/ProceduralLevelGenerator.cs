@@ -30,6 +30,38 @@ public class ProceduralLevelGenerator : MonoBehaviour
     public int baseSeed = 12345;
 
 
+    private struct DominoFallArea
+    {
+        public Vector3 start;
+        public Vector3 end;
+        public float radius;
+        public Vector3 direction;
+    }
+
+
+    [Header("Line End Validation")]
+
+    [Tooltip("Multiplier applied to domino height to determine maximum fall reach.")]
+    [SerializeField]
+    [Range(0.5f, 1.5f)]
+    private float endFallReachMultiplier = 1.0f;
+
+    [Tooltip("Extra width around the falling last domino.")]
+    [SerializeField]
+    [Range(0f, 0.2f)]
+    private float endFallPadding = 0.04f;
+
+    [Tooltip("Reject two line ends when their fall corridors overlap.")]
+    [SerializeField]
+    private bool rejectOpposingEnds = true;
+
+
+    [Header("Physical Line Clearance")]
+
+    [Tooltip("Minimum world-space distance between dominoes belonging to different lines.")]
+    [SerializeField]
+    private float minimumDominoClearance = 0.05f;
+
     // =========================================================
     // PREFABS
     // =========================================================
@@ -44,6 +76,12 @@ public class ProceduralLevelGenerator : MonoBehaviour
     )]
     public DominoLine linePrefab;
 
+
+    [Header("Validation")]
+    public DominoBlockingCalculator blockingCalculator;
+    public ProceduralLevelValidator validator;
+
+    public int maxGenerationAttempts = 50;
 
     // =========================================================
     // BOARD
@@ -211,45 +249,29 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
     public void GenerateLevel()
     {
-        ClearLevel();
-
         if (!ValidateSettings())
             return;
 
+        if (blockingCalculator == null)
+        {
+            Debug.LogError(
+                "DominoBlockingCalculator is not assigned.");
 
-        // -----------------------------------------------------
-        // CALCULATE LEVEL SIZE
-        // -----------------------------------------------------
+            return;
+        }
+
+        if (validator == null)
+        {
+            Debug.LogError(
+                "ProceduralLevelValidator is not assigned.");
+
+            return;
+        }
 
         Vector2 groundSize =
             CalculateGroundSize();
 
-
-        // -----------------------------------------------------
-        // RESIZE GROUND
-        // -----------------------------------------------------
-
-        ResizeGround(
-            groundSize
-        );
-
-
-        // -----------------------------------------------------
-        // SEED
-        // -----------------------------------------------------
-
-        int seed =
-            baseSeed +
-            levelNumber * 7919;
-
-        Random.InitState(
-            seed
-        );
-
-
-        // -----------------------------------------------------
-        // GRID SIZE
-        // -----------------------------------------------------
+        ResizeGround(groundSize);
 
         int columns =
             CalculateColumns();
@@ -257,76 +279,365 @@ public class ProceduralLevelGenerator : MonoBehaviour
         int rows =
             CalculateRows();
 
-
-        // -----------------------------------------------------
-        // BOARD CENTER
-        // -----------------------------------------------------
-
         Vector3 boardCenter =
             groundRenderer != null
                 ? groundRenderer.bounds.center
                 : transform.position;
 
-        // Grid itself lives at ground level.
         boardCenter.y =
             transform.position.y;
 
+        // =====================================================
+        // TRY MULTIPLE GENERATIONS
+        // =====================================================
 
-        // -----------------------------------------------------
-        // CREATE GRID
-        // -----------------------------------------------------
+        for (int attempt = 0;
+             attempt < maxGenerationAttempts;
+             attempt++)
+        {
+            // ---------------------------------------------
+            // CLEAR PREVIOUS ATTEMPT
+            // ---------------------------------------------
 
-        board =
-            new GridBoard(
-                columns,
-                rows,
-                cellSize,
-                boardCenter
-            );
+            ClearLevel();
 
+            // ---------------------------------------------
+            // IMPORTANT:
+            // Different seed for every retry.
+            // ---------------------------------------------
 
-        // -----------------------------------------------------
-        // CREATE GENERATED ROOT
-        // -----------------------------------------------------
+            int seed =
+                baseSeed +
+                levelNumber * 7919 +
+                attempt * 104729;
 
-        CreateGeneratedRoot();
+            Random.InitState(seed);
 
+            // ---------------------------------------------
+            // CREATE BOARD
+            // ---------------------------------------------
 
-        generatedDominoCount = 0;
-        generatedLineCount = 0;
+            board =
+                new GridBoard(
+                    columns,
+                    rows,
+                    cellSize,
+                    boardCenter);
 
-        generatedLines.Clear();
+            // ---------------------------------------------
+            // CREATE ROOT
+            // ---------------------------------------------
 
+            CreateGeneratedRoot();
 
-        // -----------------------------------------------------
-        // CREATE NON-CROSSING COVERAGE
-        // -----------------------------------------------------
+            generatedDominoCount = 0;
+            generatedLineCount = 0;
 
-        GenerateSegmentedCoverage();
+            generatedLines.Clear();
 
+            // ---------------------------------------------
+            // GENERATE GEOMETRY
+            // ---------------------------------------------
 
-        // -----------------------------------------------------
-        // CREATE GUARANTEED-SOLVABLE DEPENDENCIES
-        // -----------------------------------------------------
+            GenerateSegmentedCoverage();
 
-        //GenerateDependencies();
+            // ---------------------------------------------
+            // MAKE SURE CONNECTIONS ARE CURRENT
+            // ---------------------------------------------
 
+            foreach (DominoLine line in generatedLines)
+            {
+                if (line != null)
+                    line.AutoConnect();
+            }
 
-        // -----------------------------------------------------
-        // DEBUG
-        // -----------------------------------------------------
+            // ---------------------------------------------
+            // CALCULATE REAL GEOMETRIC BLOCKERS
+            // ---------------------------------------------
 
-        Debug.Log(
-            $"Generated Level {levelNumber} | " +
-            $"Ground {groundSize.x:F2} x {groundSize.y:F2} | " +
-            $"Grid {columns} x {rows} | " +
-            $"Lines {generatedLineCount} | " +
-            $"Dominoes {generatedDominoCount} | " +
-            $"Seed {seed}"
-        );
+            blockingCalculator.CalculateBlocking(
+                generatedLines);
+
+            // ---------------------------------------------
+            // CHECK SOLVABILITY
+            // ---------------------------------------------
+
+            bool solvable =
+                validator.IsLevelSolvable(
+                    generatedLines);
+
+            if (solvable)
+            {
+                Debug.Log(
+                    $"VALID LEVEL {levelNumber} | " +
+                    $"Attempt {attempt + 1} | " +
+                    $"Ground {groundSize.x:F2} x {groundSize.y:F2} | " +
+                    $"Grid {columns} x {rows} | " +
+                    $"Lines {generatedLineCount} | " +
+                    $"Dominoes {generatedDominoCount} | " +
+                    $"Seed {seed}");
+
+                DebugGeneratedDependencies();
+
+                return;
+            }
+
+            Debug.LogWarning(
+                $"INVALID LEVEL | " +
+                $"Attempt {attempt + 1} | " +
+                $"Seed {seed} | Regenerating...");
+        }
+
+        // =====================================================
+        // FAILED ALL ATTEMPTS
+        // =====================================================
+
+        ClearLevel();
+
+        Debug.LogError(
+            $"FAILED to generate solvable Level {levelNumber} " +
+            $"after {maxGenerationAttempts} attempts.");
     }
 
-   
+
+    private bool HasEnoughPhysicalClearance(
+    List<Vector2Int> candidatePath)
+    {
+        if (candidatePath == null ||
+            candidatePath.Count < 2)
+        {
+            return false;
+        }
+
+        // Get collider from domino prefab.
+        Collider prefabCollider =
+            dominoPrefab.GetComponentInChildren<Collider>();
+
+        if (prefabCollider == null)
+        {
+            Debug.LogError(
+                "Domino prefab needs a Collider.");
+
+            return false;
+        }
+
+        // Minimum allowed distance between
+        // centers of dominoes from DIFFERENT lines.
+        //
+        // cellSize = 0.25
+        // gives approximately 0.3125.
+        float minimumCenterDistance =
+            cellSize * 1.25f;
+
+        float minimumCenterDistanceSqr =
+            minimumCenterDistance *
+            minimumCenterDistance;
+
+        // =========================================================
+        // CHECK EVERY DOMINO POSITION IN CANDIDATE LINE
+        // =========================================================
+
+        for (int i = 0; i < candidatePath.Count; i++)
+        {
+            Vector2Int candidateCell =
+                candidatePath[i];
+
+            Vector3 candidatePosition =
+                board.CellToWorld(candidateCell);
+
+            candidatePosition.y +=
+                groundOffset;
+
+            // -----------------------------------------------------
+            // CALCULATE CANDIDATE DOMINO ROTATION
+            // -----------------------------------------------------
+
+            Vector3 direction =
+                GetPathDirection(
+                    candidatePath,
+                    i);
+
+            if (direction.sqrMagnitude < 0.001f)
+                continue;
+
+            Quaternion candidateRotation =
+                Quaternion.LookRotation(
+                    direction,
+                    Vector3.up);
+
+            candidateRotation *=
+                Quaternion.Euler(
+                    rotationOffset);
+
+            // =====================================================
+            // COMPARE AGAINST ALL EXISTING LINES
+            // =====================================================
+
+            foreach (DominoLine existingLine in generatedLines)
+            {
+                if (existingLine == null)
+                    continue;
+
+                if (existingLine.dominoes == null)
+                    continue;
+
+                foreach (Domino existing in existingLine.dominoes)
+                {
+                    if (existing == null)
+                        continue;
+
+                    Vector3 existingPosition =
+                        existing.transform.position;
+
+                    // -------------------------------------------------
+                    // RULE 1:
+                    // MINIMUM CENTER-TO-CENTER DISTANCE
+                    // -------------------------------------------------
+
+                    Vector3 difference =
+                        candidatePosition -
+                        existingPosition;
+
+                    // Ignore height.
+                    // We only care about X/Z board distance.
+                    difference.y = 0f;
+
+                    if (difference.sqrMagnitude <
+                        minimumCenterDistanceSqr)
+                    {
+                        return false;
+                    }
+
+                    // -------------------------------------------------
+                    // RULE 2:
+                    // ACTUAL ROTATED DOMINO FOOTPRINT
+                    // -------------------------------------------------
+
+                    if (FootprintsOverlap(
+                        candidatePosition,
+                        candidateRotation,
+                        existing,
+                        prefabCollider))
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        // No existing domino is too close.
+        return true;
+    }
+
+
+    private bool FootprintsOverlap(
+    Vector3 candidatePosition,
+    Quaternion candidateRotation,
+    Domino existing,
+    Collider prefabCollider)
+    {
+        Collider existingCollider =
+            existing.GetComponentInChildren<Collider>();
+
+        if (existingCollider == null)
+            return false;
+
+        // Local collider dimensions from prefab.
+        Vector3 localSize =
+            prefabCollider.bounds.size;
+
+        float candidateHalfX =
+            localSize.x * 0.5f +
+            minimumDominoClearance;
+
+        float candidateHalfZ =
+            localSize.z * 0.5f +
+            minimumDominoClearance;
+
+        // Candidate's horizontal axes.
+        Vector3 candidateRight =
+            candidateRotation * Vector3.right;
+
+        Vector3 candidateForward =
+            candidateRotation * Vector3.forward;
+
+        candidateRight.y = 0f;
+        candidateForward.y = 0f;
+
+        candidateRight.Normalize();
+        candidateForward.Normalize();
+
+        // Existing domino's horizontal axes.
+        Vector3 existingRight =
+            existing.transform.right;
+
+        Vector3 existingForward =
+            existing.transform.forward;
+
+        existingRight.y = 0f;
+        existingForward.y = 0f;
+
+        existingRight.Normalize();
+        existingForward.Normalize();
+
+        Bounds existingBounds =
+            existingCollider.bounds;
+
+        float existingHalfX =
+            Mathf.Max(
+                existingBounds.extents.x,
+                existingBounds.extents.z);
+
+        // Conservative radius for existing domino.
+        float existingRadius =
+            existingHalfX +
+            minimumDominoClearance;
+
+        Vector3 difference =
+            existing.transform.position -
+            candidatePosition;
+
+        difference.y = 0f;
+
+        // Candidate rectangle -> approximate closest point.
+        float localX =
+            Vector3.Dot(
+                difference,
+                candidateRight);
+
+        float localZ =
+            Vector3.Dot(
+                difference,
+                candidateForward);
+
+        float closestX =
+            Mathf.Clamp(
+                localX,
+                -candidateHalfX,
+                candidateHalfX);
+
+        float closestZ =
+            Mathf.Clamp(
+                localZ,
+                -candidateHalfZ,
+                candidateHalfZ);
+
+        Vector3 closestPoint =
+            candidatePosition +
+            candidateRight * closestX +
+            candidateForward * closestZ;
+
+        Vector3 distance =
+            existing.transform.position -
+            closestPoint;
+
+        distance.y = 0f;
+
+        return distance.sqrMagnitude <
+               existingRadius * existingRadius;
+    }
+
+
 
 
     // =========================================================
@@ -514,15 +825,17 @@ public class ProceduralLevelGenerator : MonoBehaviour
                     maxDominoesPerLine + 1
                 );
 
-            Vector2Int startCell =
-                GetRandomStartCell();
+            if (!TryGetRandomStartCell(
+        out Vector2Int startCell))
+            {
+                continue;
+            }
 
             List<Vector2Int> path =
-                TryCreateStraightPath(
-                    startCell,
-                    step,
-                    desiredLength
-                );
+     TryCreateStraightPath(
+         startCell,
+         step,
+         desiredLength);
 
             if (path == null ||
                 path.Count < 2)
@@ -530,11 +843,15 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 continue;
             }
 
+            if (!IsCandidateEndSafe(path))
+            {
+                continue;
+            }
+
             DominoLine line =
                 CreateProceduralLine(
                     path,
-                    lineIndex
-                );
+                    lineIndex);
 
             if (line == null)
                 continue;
@@ -552,6 +869,92 @@ public class ProceduralLevelGenerator : MonoBehaviour
             $"Occupied {occupiedCells}/{totalCells} cells. " +
             $"Attempts: {attempts}"
         );
+    }
+
+    private bool IsCandidateEndSafe(
+    List<Vector2Int> candidatePath)
+    {
+        if (!TryGetCandidateFallArea(
+                candidatePath,
+                out DominoFallArea candidateArea))
+        {
+            return false;
+        }
+
+        foreach (DominoLine existingLine in generatedLines)
+        {
+            if (existingLine == null)
+                continue;
+
+            if (!TryGetExistingLineFallArea(
+                    existingLine,
+                    out DominoFallArea existingArea))
+            {
+                continue;
+            }
+
+            // =====================================================
+            // ONLY CARE ABOUT ENDS THAT FACE EACH OTHER
+            // =====================================================
+
+            if (!AreEndsFacingEachOther(
+                    candidateArea,
+                    existingArea))
+            {
+                continue;
+            }
+
+            // =====================================================
+            // DISTANCE BETWEEN THE TWO LAST DOMINOES
+            // =====================================================
+
+            Vector3 candidateLast =
+                candidateArea.start;
+
+            Vector3 existingLast =
+                existingArea.start;
+
+            candidateLast.y = 0f;
+            existingLast.y = 0f;
+
+            float distance =
+                Vector3.Distance(
+                    candidateLast,
+                    existingLast);
+
+            // =====================================================
+            // HOW FAR EACH DOMINO CAN FALL
+            // =====================================================
+
+            float candidateReach =
+                Vector3.Distance(
+                    candidateArea.start,
+                    candidateArea.end);
+
+            float existingReach =
+                Vector3.Distance(
+                    existingArea.start,
+                    existingArea.end);
+
+            // Small safety margin.
+            float safetyMargin = 0.03f;
+
+            float requiredDistance =
+                candidateReach +
+                existingReach +
+                safetyMargin;
+
+            // =====================================================
+            // NOT ENOUGH ROOM FOR BOTH TO FALL
+            // =====================================================
+
+            if (distance < requiredDistance)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private LineDirection GetRandomLineDirection()
@@ -646,7 +1049,8 @@ public class ProceduralLevelGenerator : MonoBehaviour
         return Vector2Int.right;
     }
 
-    private Vector2Int GetRandomStartCell()
+    private bool TryGetRandomStartCell(
+    out Vector2Int result)
     {
         const int attempts = 30;
 
@@ -655,21 +1059,19 @@ public class ProceduralLevelGenerator : MonoBehaviour
             Vector2Int cell =
                 new Vector2Int(
                     Random.Range(0, board.Width),
-                    Random.Range(0, board.Height)
-                );
+                    Random.Range(0, board.Height));
 
             if (IsCellClearFromOtherLines(
                     cell,
                     segmentGapCells))
             {
-                return cell;
+                result = cell;
+                return true;
             }
         }
 
-        return new Vector2Int(
-            Random.Range(0, board.Width),
-            Random.Range(0, board.Height)
-        );
+        result = default;
+        return false;
     }
 
     private List<Vector2Int> TryCreateStraightPath(
@@ -985,7 +1387,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
         // Procedural levels use generated dependencies.
         // -----------------------------------------------------
 
-        line.useGeneratedBlocking = false;
+        line.useGeneratedBlocking = true;
 
         line.blockedByLines.Clear();
 
@@ -1276,6 +1678,337 @@ public class ProceduralLevelGenerator : MonoBehaviour
         DebugGeneratedDependencies();
     }
 
+
+    private bool TryGetExistingLineFallArea(
+    DominoLine line,
+    out DominoFallArea area)
+    {
+        area = default;
+
+        if (line == null ||
+            line.dominoes == null ||
+            line.dominoes.Count < 2)
+        {
+            return false;
+        }
+
+        Domino last =
+            line.dominoes[
+                line.dominoes.Count - 1];
+
+        Domino previous =
+            line.dominoes[
+                line.dominoes.Count - 2];
+
+        if (last == null ||
+            previous == null)
+        {
+            return false;
+        }
+
+        Vector3 direction =
+            last.transform.position -
+            previous.transform.position;
+
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude < 0.001f)
+            return false;
+
+        direction.Normalize();
+
+        Collider collider =
+            last.GetComponentInChildren<Collider>();
+
+        if (collider == null)
+            return false;
+
+        Bounds bounds =
+            collider.bounds;
+
+        float fallReach =
+            bounds.size.y *
+            endFallReachMultiplier;
+
+        float radius =
+            Mathf.Max(
+                bounds.extents.x,
+                bounds.extents.z)
+            + endFallPadding;
+
+        Vector3 start =
+            last.transform.position +
+            direction * 0.05f;
+
+        Vector3 end =
+            last.transform.position +
+            direction * fallReach;
+
+        start.y = last.transform.position.y;
+        end.y = last.transform.position.y;
+
+        area = new DominoFallArea
+        {
+            start = start,
+            end = end,
+            radius = radius,
+            direction = direction
+        };
+
+        return true;
+    }
+
+
+    private bool TryGetCandidateFallArea(
+    List<Vector2Int> path,
+    out DominoFallArea area)
+    {
+        area = default;
+
+        if (path == null ||
+            path.Count < 2)
+        {
+            return false;
+        }
+
+        Vector2Int previousCell =
+            path[path.Count - 2];
+
+        Vector2Int lastCell =
+            path[path.Count - 1];
+
+        Vector3 previousPosition =
+            board.CellToWorld(previousCell);
+
+        Vector3 lastPosition =
+            board.CellToWorld(lastCell);
+
+        previousPosition.y += groundOffset;
+        lastPosition.y += groundOffset;
+
+        Vector3 direction =
+            lastPosition -
+            previousPosition;
+
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude < 0.001f)
+            return false;
+
+        direction.Normalize();
+
+        Collider prefabCollider =
+            dominoPrefab.GetComponentInChildren<Collider>();
+
+        if (prefabCollider == null)
+        {
+            Debug.LogError(
+                "Domino prefab needs a Collider.");
+
+            return false;
+        }
+
+        Bounds bounds =
+            prefabCollider.bounds;
+
+        float fallReach =
+            bounds.size.y *
+            endFallReachMultiplier;
+
+        float radius =
+            Mathf.Max(
+                bounds.extents.x,
+                bounds.extents.z)
+            + endFallPadding;
+
+        Vector3 start =
+            lastPosition +
+            direction * 0.05f;
+
+        Vector3 end =
+            lastPosition +
+            direction * fallReach;
+
+        start.y = lastPosition.y;
+        end.y = lastPosition.y;
+
+        area = new DominoFallArea
+        {
+            start = start,
+            end = end,
+            radius = radius,
+            direction = direction
+        };
+
+        return true;
+    }
+
+    private bool FallAreasOverlap(
+    DominoFallArea a,
+    DominoFallArea b)
+    {
+        float distance =
+            DistanceBetweenSegmentsXZ(
+                a.start,
+                a.end,
+                b.start,
+                b.end);
+
+        float combinedRadius =
+            a.radius +
+            b.radius;
+
+        return distance <
+               combinedRadius;
+    }
+
+    private float DistanceBetweenSegmentsXZ(
+    Vector3 a1,
+    Vector3 a2,
+    Vector3 b1,
+    Vector3 b2)
+    {
+        // Flatten onto board.
+        a1.y = 0f;
+        a2.y = 0f;
+        b1.y = 0f;
+        b2.y = 0f;
+
+        // Sample along A.
+        // This is more than accurate enough for generation
+        // because these are short domino-fall segments.
+
+        const int samples = 12;
+
+        float minimumDistance =
+            float.MaxValue;
+
+        for (int i = 0; i <= samples; i++)
+        {
+            float t =
+                i / (float)samples;
+
+            Vector3 point =
+                Vector3.Lerp(
+                    a1,
+                    a2,
+                    t);
+
+            Vector3 closest =
+                ClosestPointOnSegmentXZ(
+                    b1,
+                    b2,
+                    point);
+
+            float distance =
+                Vector3.Distance(
+                    point,
+                    closest);
+
+            if (distance < minimumDistance)
+            {
+                minimumDistance =
+                    distance;
+            }
+        }
+
+        // Also sample B against A.
+        for (int i = 0; i <= samples; i++)
+        {
+            float t =
+                i / (float)samples;
+
+            Vector3 point =
+                Vector3.Lerp(
+                    b1,
+                    b2,
+                    t);
+
+            Vector3 closest =
+                ClosestPointOnSegmentXZ(
+                    a1,
+                    a2,
+                    point);
+
+            float distance =
+                Vector3.Distance(
+                    point,
+                    closest);
+
+            if (distance < minimumDistance)
+            {
+                minimumDistance =
+                    distance;
+            }
+        }
+
+        return minimumDistance;
+    }
+
+
+    private Vector3 ClosestPointOnSegmentXZ(
+    Vector3 start,
+    Vector3 end,
+    Vector3 point)
+    {
+        start.y = 0f;
+        end.y = 0f;
+        point.y = 0f;
+
+        Vector3 segment =
+            end - start;
+
+        float lengthSquared =
+            segment.sqrMagnitude;
+
+        if (lengthSquared < 0.0001f)
+            return start;
+
+        float t =
+            Vector3.Dot(
+                point - start,
+                segment)
+            / lengthSquared;
+
+        t = Mathf.Clamp01(t);
+
+        return start +
+               segment * t;
+    }
+
+    private bool AreEndsFacingEachOther(
+    DominoFallArea a,
+    DominoFallArea b)
+    {
+        Vector3 fromAToB =
+            b.start - a.start;
+
+        fromAToB.y = 0f;
+
+        if (fromAToB.sqrMagnitude < 0.001f)
+            return true;
+
+        fromAToB.Normalize();
+
+        Vector3 fromBToA =
+            -fromAToB;
+
+        float aFacesB =
+            Vector3.Dot(
+                a.direction,
+                fromAToB);
+
+        float bFacesA =
+            Vector3.Dot(
+                b.direction,
+                fromBToA);
+
+        // > 0 means each line is generally pointing
+        // toward the other.
+        return
+            aFacesB > 0.25f &&
+            bFacesA > 0.25f;
+    }
 
     // =========================================================
     // DEPENDENCY DEBUGGING

@@ -94,6 +94,34 @@ public class DominoLine : MonoBehaviour
         Debug.Log("Auto Connected " + dominoes.Count + " dominoes.");
     }
 
+    public bool IsProcedurallyBlocked()
+    {
+        if (!useGeneratedBlocking)
+            return false;
+
+        foreach (DominoLine blocker in blockedByLines)
+        {
+            if (blocker != null && !blocker.HasStartedLine)
+                return true;
+        }
+
+        return false;
+    }
+
+    public void ClearGeneratedBlocking()
+    {
+        blockedByLines.Clear();
+    }
+
+    public void AddBlocker(DominoLine line)
+    {
+        if (line == null || line == this)
+            return;
+
+        if (!blockedByLines.Contains(line))
+            blockedByLines.Add(line);
+    }
+
     public void SetFirstDominoVisual(bool isFirst)
     {
         if (dominoRenderer == null)
@@ -173,11 +201,14 @@ public class DominoLine : MonoBehaviour
 
                 if (!blocker.HasStartedLine)
                 {
+                    Debug.Log(
+                        $"{name} BLOCKED BY GENERATED DEPENDENCY: " +
+                        $"{blocker.name}");
+
                     return true;
                 }
             }
         }
-
 
         // ==============================================
         // 2. REAL PHYSICAL BLOCKING
@@ -185,9 +216,14 @@ public class DominoLine : MonoBehaviour
 
         if (IsPhysicallyBlocked())
         {
+            Debug.Log(
+                $"{name} BLOCKED BY PHYSICAL CHECK");
+
             return true;
         }
 
+        Debug.Log(
+            $"{name} IS FREE");
 
         return false;
     }
@@ -212,70 +248,125 @@ public class DominoLine : MonoBehaviour
             return false;
         }
 
-        Vector3 direction =
-            last.transform.position -
-            previous.transform.position;
-
-        direction.y = 0f;
-
-        if (direction.sqrMagnitude < 0.001f)
-            return false;
-
-        direction.Normalize();
-
-        // -------------------------------------------------
-        // Approximate the space the LAST domino occupies
-        // while falling forward.
-        // -------------------------------------------------
-
         Collider lastCollider =
             last.GetComponentInChildren<Collider>();
 
         if (lastCollider == null)
             return false;
 
-        Bounds bounds =
-            lastCollider.bounds;
+        // =====================================================
+        // FALL DIRECTION
+        // =====================================================
 
-        // Domino height becomes approximately its forward
-        // reach when it falls.
-        float fallReach =
-     bounds.size.y *
-     fallReachMultiplier;
+        Vector3 fallDirection =
+            last.transform.position -
+            previous.transform.position;
 
-        // Thickness / width of the domino.
-        float halfWidth =
-    Mathf.Max(
-        bounds.extents.x,
-        bounds.extents.z
-    ) +
-    fallCheckPadding;
+        fallDirection.y = 0f;
 
-        // Start slightly in front of the last domino.
-        Vector3 start =
+        if (fallDirection.sqrMagnitude < 0.001f)
+            return false;
+
+        fallDirection.Normalize();
+
+        // =====================================================
+        // GET REAL LOCAL COLLIDER SIZE
+        // =====================================================
+
+        BoxCollider box =
+            lastCollider as BoxCollider;
+
+        if (box == null)
+        {
+            Debug.LogWarning(
+                "Domino should use a BoxCollider " +
+                "for accurate blocking detection.");
+
+            return false;
+        }
+
+        Vector3 scaledSize =
+            Vector3.Scale(
+                box.size,
+                box.transform.lossyScale);
+
+        // Your standing domino dimensions.
+        float width =
+            Mathf.Abs(scaledSize.x);
+
+        float height =
+            Mathf.Abs(scaledSize.y);
+
+        float thickness =
+            Mathf.Abs(scaledSize.z);
+
+        // =====================================================
+        // CREATE FALLEN-DOMINO ORIENTATION
+        // =====================================================
+
+        // The fallen domino lies along fallDirection.
+        //
+        // right = domino width
+        // forward = fallen length/height
+
+        Vector3 right =
+            Vector3.Cross(
+                Vector3.up,
+                fallDirection);
+
+        right.Normalize();
+
+        Quaternion fallenRotation =
+            Quaternion.LookRotation(
+                fallDirection,
+                Vector3.up);
+
+        // =====================================================
+        // FALLEN DOMINO CENTER
+        // =====================================================
+
+        // When it falls, approximately half of its height
+        // extends forward from its pivot.
+
+        Vector3 fallenCenter =
             last.transform.position +
-            direction * 0.05f;
+            fallDirection * (height * 0.5f);
 
-        // End where the top of the domino would roughly land.
-        Vector3 end =
-            last.transform.position +
-            direction * fallReach;
-
-        // Keep check near the center height of possible collision.
-        float checkHeight =
+        // Keep the box close to the ground.
+        fallenCenter.y =
             last.transform.position.y;
 
-        start.y = checkHeight;
-        end.y = checkHeight;
+        // =====================================================
+        // FALLEN BOX SIZE
+        // =====================================================
+
+        Vector3 halfExtents =
+            new Vector3(
+                width * 0.5f,
+                thickness * 0.5f,
+                height * 0.5f);
+
+        // Small tolerance.
+        //
+        // IMPORTANT:
+        // Don't make this large.
+        halfExtents.x +=
+            fallCheckPadding;
+
+        halfExtents.z +=
+            fallCheckPadding;
+
+        // =====================================================
+        // CHECK COLLISION
+        // =====================================================
 
         Collider[] hits =
-            Physics.OverlapCapsule(
-                start,
-                end,
-                halfWidth,
+            Physics.OverlapBox(
+                fallenCenter,
+                halfExtents,
+                fallenRotation,
                 blockerMask,
-                QueryTriggerInteraction.Ignore
-            );
+                QueryTriggerInteraction.Ignore);
 
         foreach (Collider hit in hits)
         {
@@ -289,11 +380,10 @@ public class DominoLine : MonoBehaviour
             if (other.ownerLine == this)
                 continue;
 
-            // Ignore dominoes that already started.
+            // Already fallen/started domino doesn't block us.
             if (other.HasStarted)
                 continue;
 
-            // Only standing dominoes count.
             if (!other.IsStanding())
                 continue;
 
@@ -305,13 +395,7 @@ public class DominoLine : MonoBehaviour
 
     public void StartLine()
     {
-        if (firstDomino == null)
-            return;
-
-        if (!firstDomino.canStartChain)
-            return;
-
-        firstDomino.StartChain();
+        TryStartLine();
     }
 
     public void ResetLine()
@@ -327,35 +411,93 @@ public class DominoLine : MonoBehaviour
         RefreshAvailability();
     }
 
-    //private void OnDrawGizmosSelected()
-    //{
-    //    if (dominoes == null || dominoes.Count < 2)
-    //        return;
+#if UNITY_EDITOR
 
-    //    Domino last = dominoes[dominoes.Count - 1];
-    //    Domino previous = dominoes[dominoes.Count - 2];
+    private void OnDrawGizmosSelected()
+    {
+        if (dominoes == null ||
+            dominoes.Count < 2)
+        {
+            return;
+        }
 
-    //    if (last == null || previous == null)
-    //        return;
+        Domino last =
+            dominoes[dominoes.Count - 1];
 
-    //    Vector3 direction =
-    //        last.transform.position -
-    //        previous.transform.position;
+        Domino previous =
+            dominoes[dominoes.Count - 2];
 
-    //    direction.y = 0;
+        if (last == null ||
+            previous == null)
+        {
+            return;
+        }
 
-    //    if (direction.sqrMagnitude < 0.001f)
-    //        return;
+        BoxCollider box =
+            last.GetComponentInChildren<BoxCollider>();
 
-    //    direction.Normalize();
+        if (box == null)
+            return;
 
-    //    Vector3 checkPosition =
-    //        last.transform.position +
-    //        direction * blockerCheckDistance;
+        Vector3 direction =
+            last.transform.position -
+            previous.transform.position;
 
-    //    Gizmos.DrawWireSphere(
-    //        checkPosition,
-    //        blockerCheckRadius
-    //    );
-    //}
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude < 0.001f)
+            return;
+
+        direction.Normalize();
+
+        Vector3 size =
+            Vector3.Scale(
+                box.size,
+                box.transform.lossyScale);
+
+        float width =
+            Mathf.Abs(size.x);
+
+        float height =
+            Mathf.Abs(size.y);
+
+        float thickness =
+            Mathf.Abs(size.z);
+
+        Vector3 center =
+            last.transform.position +
+            direction * (height * 0.5f);
+
+        center.y =
+            last.transform.position.y;
+
+        Quaternion rotation =
+            Quaternion.LookRotation(
+                direction,
+                Vector3.up);
+
+        Vector3 drawSize =
+            new Vector3(
+                width + fallCheckPadding * 2f,
+                thickness,
+                height + fallCheckPadding * 2f);
+
+        Matrix4x4 oldMatrix =
+            Gizmos.matrix;
+
+        Gizmos.matrix =
+            Matrix4x4.TRS(
+                center,
+                rotation,
+                Vector3.one);
+
+        Gizmos.DrawWireCube(
+            Vector3.zero,
+            drawSize);
+
+        Gizmos.matrix =
+            oldMatrix;
+    }
+
+#endif
 }

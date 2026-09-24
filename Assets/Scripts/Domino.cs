@@ -57,8 +57,11 @@ public class Domino : MonoBehaviour
         // by physics from another line.
         rb.isKinematic = true;
 
-        rb.linearVelocity = Vector3.zero;
-        rb.angularVelocity = Vector3.zero;
+        if (!rb.isKinematic)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
     }
 
     public bool IsStanding()
@@ -221,10 +224,12 @@ public class Domino : MonoBehaviour
         hasStarted = false;
         fadeScheduled = false;
 
-        rb.isKinematic = true;
+        rb.isKinematic = false;
 
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
+
+        rb.isKinematic = true;
 
         transform.position = originalPosition;
         transform.rotation = originalRotation;
