@@ -2,7 +2,6 @@ Shader "Custom/SimpleRevealGround"
 {
     Properties
     {
-        _BoardTexture ("Board Texture", 2D) = "white" {}
         _MainTexture ("Hidden Image", 2D) = "white" {}
         _RevealMask ("Reveal Mask", 2D) = "black" {}
     }
@@ -11,10 +10,19 @@ Shader "Custom/SimpleRevealGround"
     {
         Tags
         {
-            "RenderType"="Opaque"
-            "Queue"="Geometry"
+            "RenderType"="Transparent"
+            "Queue"="Transparent"
             "RenderPipeline"="UniversalPipeline"
         }
+
+        Blend SrcAlpha OneMinusSrcAlpha
+
+        // Important:
+        // Transparent unrevealed parts should not write
+        // invisible geometry into the depth buffer.
+        ZWrite Off
+
+        Cull Back
 
         Pass
         {
@@ -27,9 +35,6 @@ Shader "Custom/SimpleRevealGround"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-            TEXTURE2D(_BoardTexture);
-            SAMPLER(sampler_BoardTexture);
-
             TEXTURE2D(_MainTexture);
             SAMPLER(sampler_MainTexture);
 
@@ -38,7 +43,6 @@ Shader "Custom/SimpleRevealGround"
 
             CBUFFER_START(UnityPerMaterial)
 
-                float4 _BoardTexture_ST;
                 float4 _MainTexture_ST;
                 float4 _RevealMask_ST;
 
@@ -76,27 +80,9 @@ Shader "Custom/SimpleRevealGround"
 
             half4 frag(Varyings input) : SV_Target
             {
-                // -----------------------------------------
-                // BOARD
-                // -----------------------------------------
-
-                float2 boardUV =
-                    TRANSFORM_TEX(
-                        input.uv,
-                        _BoardTexture
-                    );
-
-                float3 boardColor =
-                    SAMPLE_TEXTURE2D(
-                        _BoardTexture,
-                        sampler_BoardTexture,
-                        boardUV
-                    ).rgb;
-
-
-                // -----------------------------------------
+                // =========================================
                 // HIDDEN IMAGE
-                // -----------------------------------------
+                // =========================================
 
                 float2 imageUV =
                     TRANSFORM_TEX(
@@ -104,44 +90,48 @@ Shader "Custom/SimpleRevealGround"
                         _MainTexture
                     );
 
-                float3 imageColor =
+                half4 imageColor =
                     SAMPLE_TEXTURE2D(
                         _MainTexture,
                         sampler_MainTexture,
                         imageUV
-                    ).rgb;
+                    );
 
 
-                // -----------------------------------------
+                // =========================================
                 // REVEAL MASK
-                // -----------------------------------------
+                // =========================================
+
+                float2 maskUV =
+                    TRANSFORM_TEX(
+                        input.uv,
+                        _RevealMask
+                    );
 
                 float reveal =
                     SAMPLE_TEXTURE2D(
                         _RevealMask,
                         sampler_RevealMask,
-                        input.uv
+                        maskUV
                     ).r;
 
                 reveal =
                     saturate(reveal);
 
 
-                // -----------------------------------------
-                // FINAL BLEND
-                // -----------------------------------------
+                // =========================================
+                // RESULT
+                //
+                // reveal = 0 -> invisible
+                // reveal = 1 -> image fully visible
+                // =========================================
 
-                float3 finalColor =
-                    lerp(
-                        boardColor,
-                        imageColor,
-                        reveal
-                    );
-
+                float alpha =
+                    imageColor.a * reveal;
 
                 return half4(
-                    finalColor,
-                    1
+                    imageColor.rgb,
+                    alpha
                 );
             }
 

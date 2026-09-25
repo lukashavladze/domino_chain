@@ -33,6 +33,7 @@ public class DominoLine : MonoBehaviour
 
 
 
+
     [Header("Visual")]
     [SerializeField] private Renderer dominoRenderer;
 
@@ -65,33 +66,51 @@ public class DominoLine : MonoBehaviour
 
             domino.ownerLine = this;
 
-            // Don't decide availability here anymore.
+            // Only first domino can start the line.
             domino.canStartChain = (i == 0);
-            // Set material:
-            // first domino = green
-            // all others = normal
+
+            // ==========================================
+            // MATERIAL
+            // ==========================================
+
             Renderer renderer =
                 domino.GetComponentInChildren<Renderer>();
 
             if (renderer != null)
             {
-                renderer.sharedMaterial =
-                    (i == 0)
-                        ? firstDominoMaterial
-                        : normalMaterial;
+                if (i == 0)
+                {
+                    // First/start domino.
+                    renderer.sharedMaterial =
+                        firstDominoMaterial;
+                }
+                else
+                {
+                    // All normal dominoes.
+                    renderer.sharedMaterial =
+                        normalMaterial;
+                }
             }
+
+            // ==========================================
+            // CONNECTIONS
+            // ==========================================
 
             domino.nextDominoes.Clear();
 
             if (i < dominoes.Count - 1)
             {
-                domino.nextDominoes.Add(dominoes[i + 1]);
+                domino.nextDominoes.Add(
+                    dominoes[i + 1]);
             }
         }
 
         RefreshAvailability();
 
-        Debug.Log("Auto Connected " + dominoes.Count + " dominoes.");
+        Debug.Log(
+            "Auto Connected " +
+            dominoes.Count +
+            " dominoes.");
     }
 
     public bool IsProcedurallyBlocked()

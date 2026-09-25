@@ -44,13 +44,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 27976af1c63f6b343b75652657e58382, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DominoLine
-  firstDomino: {fileID: 0}
+  firstDomino: {fileID: 1866767734236672870, guid: 32e2d0e1d0722e643a1a66f9719ccde8, type: 3}
   dominoes: []
-  blockerCheckDistance: 0.28
-  blockerCheckRadius: 0.14
+  fallReachMultiplier: 1
+  fallCheckPadding: 0.05
   blockerMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  useGeneratedBlocking: 0
+  blockedByLines: []
   dominoRenderer: {fileID: 0}
-  normalMaterial: {fileID: 2100000, guid: 5c6d752772eb915439637430bc5e513b, type: 2}
-  firstDominoMaterial: {fileID: 2100000, guid: 4262dff3f626cba4a8ab6ee8f178ee84, type: 2}
+  normalMaterial: {fileID: 2100000, guid: 47a5473fb0c9e254780b55270cc549c6, type: 2}
+  firstDominoMaterial: {fileID: 2100000, guid: 93753510b7e6c124495944553ec636cd, type: 2}
