@@ -33,7 +33,7 @@ Material:
     - _BrushSize: 0.05
     - _BrushSoftness: 0.02
     m_Colors:
-    - _BrushPosition: {r: 0.5, g: 0.4318182, b: 0, a: 0}
-    - _BrushSize: {r: 0.13571428, g: 0.086363636, b: 0, a: 0}
+    - _BrushPosition: {r: 0.03125, g: 0.47500002, b: 0, a: 0}
+    - _BrushSize: {r: 0.11875, g: 0.095, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

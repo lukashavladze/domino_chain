@@ -20,7 +20,9 @@ public class Domino : MonoBehaviour
 
     [Header("Settings")]
     public float pushForce = 1.5f;
-    public float nextDelay = 0.12f;
+    [Header("Physics Chain")]
+    [Tooltip("How close the falling domino must be before the next domino becomes dynamic.")]
+    [SerializeField] private float activationDistance = 0.22f;
 
     [Header("Cleanup")]
     public float fadeDuration = 0.3f;
@@ -33,6 +35,7 @@ public class Domino : MonoBehaviour
 
     private bool hasStarted;
     private bool fadeScheduled;
+    private bool nextActivated;
 
     private Vector3 originalScale;
     private Vector3 originalPosition;
@@ -100,7 +103,7 @@ public class Domino : MonoBehaviour
         );
     }
 
-    
+
 
     public void Fall(Vector3 direction)
     {
@@ -108,10 +111,11 @@ public class Domino : MonoBehaviour
             return;
 
         hasStarted = true;
-        
+        nextActivated = false;
 
         rb.isKinematic = false;
 
+        // ONLY the manually started domino receives a push.
         rb.AddForce(
             direction.normalized * pushForce,
             ForceMode.Impulse
@@ -123,8 +127,72 @@ public class Domino : MonoBehaviour
             StartCoroutine(FadeOut());
         }
 
-        CancelInvoke(nameof(TriggerNext));
-        Invoke(nameof(TriggerNext), nextDelay);
+        // Watch for the next domino.
+        StartCoroutine(ActivateNextBeforeContact());
+    }
+
+
+    private void ActivateFromPrevious()
+    {
+        if (hasStarted)
+            return;
+
+        hasStarted = true;
+        nextActivated = false;
+
+        // Become a normal physics object.
+        rb.isKinematic = false;
+
+        // IMPORTANT:
+        // NO AddForce here.
+        // Previous domino will physically hit this domino.
+
+        if (!fadeScheduled)
+        {
+            fadeScheduled = true;
+            StartCoroutine(FadeOut());
+        }
+
+        // This domino now prepares the following domino.
+        StartCoroutine(ActivateNextBeforeContact());
+    }
+
+    private IEnumerator ActivateNextBeforeContact()
+    {
+        if (nextDominoes == null ||
+            nextDominoes.Count == 0)
+        {
+            yield break;
+        }
+
+        while (!nextActivated)
+        {
+            foreach (Domino next in nextDominoes)
+            {
+                if (next == null)
+                    continue;
+
+                Vector3 difference =
+                    next.transform.position -
+                    transform.position;
+
+                // We only care about horizontal distance.
+                difference.y = 0f;
+
+                float distance = difference.magnitude;
+
+                if (distance <= activationDistance)
+                {
+                    nextActivated = true;
+
+                    next.ActivateFromPrevious();
+
+                    yield break;
+                }
+            }
+
+            yield return new WaitForFixedUpdate();
+        }
     }
 
     public void StartChain()
@@ -141,8 +209,8 @@ public class Domino : MonoBehaviour
             return;
 
         Vector3 direction =
-            next.transform.position -
-            transform.position;
+            next.originalPosition -
+            originalPosition;
 
         direction.y = 0f;
 
@@ -152,25 +220,6 @@ public class Domino : MonoBehaviour
         Fall(direction.normalized);
     }
 
-    private void TriggerNext()
-    {
-        foreach (Domino domino in nextDominoes)
-        {
-            if (domino == null)
-                continue;
-
-            Vector3 direction =
-                domino.transform.position -
-                transform.position;
-
-            direction.y = 0f;
-
-            if (direction.sqrMagnitude < 0.001f)
-                continue;
-
-            domino.Fall(direction.normalized);
-        }
-    }
 
     private IEnumerator FadeOut()
     {
@@ -223,6 +272,7 @@ public class Domino : MonoBehaviour
 
         hasStarted = false;
         fadeScheduled = false;
+        nextActivated = false;
 
         rb.isKinematic = false;
 

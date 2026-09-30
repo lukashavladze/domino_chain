@@ -10,7 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1589994352562199052}
   - component: {fileID: 1129866902755867453}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: ProceduralLine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
