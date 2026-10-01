@@ -16,19 +16,19 @@ public class Domino : MonoBehaviour
     public List<Domino> nextDominoes = new();
 
     [Header("Fall Physics")]
-    [SerializeField] private float gravityMultiplier = 1.5f;
+    [SerializeField] private float gravityMultiplier = 2.0f;
 
     [Header("Gameplay")]
     public bool canStartChain;
 
     [Header("Settings")]
-    public float pushForce = 1.5f;
+    public float pushForce = 2.0f;
     [Header("Physics Chain")]
     [Tooltip("How close the falling domino must be before the next domino becomes dynamic.")]
     [SerializeField] private float activationDistance = 0.22f;
 
     [Header("Cleanup")]
-    public float fadeDuration = 0.3f;
+    public float fadeDuration = 0.15f;
 
     [Header("Reveal Footprint")]
     [SerializeField] private float revealLength = 0.65f;
@@ -258,26 +258,28 @@ public class Domino : MonoBehaviour
     {
         yield return new WaitForSeconds(1.8f);
 
-        // Reveal the image underneath this domino.
-        PaintOriginalFootprint();
-
         Vector3 startScale = transform.localScale;
         Vector3 startPosition = transform.position;
 
-        Vector3 endPosition = startPosition + Vector3.down * 0.1f;
+        Vector3 endPosition =
+            startPosition + Vector3.down * 0.1f;
 
         float timer = 0f;
+
+        bool painted = false;
 
         while (timer < fadeDuration)
         {
             timer += Time.deltaTime;
 
-            float t = Mathf.Clamp01(timer / fadeDuration);
+            float t = Mathf.Clamp01(
+                timer / fadeDuration
+            );
 
-            // Smooth fade instead of linear shrink.
-            // Keeps the beginning subtle and makes the ending faster.
-            float easedT = t * t * (3f - 2f * t);
+            float easedT =
+                t * t * (3f - 2f * t);
 
+            // Shrink + sink.
             transform.localScale = Vector3.Lerp(
                 startScale,
                 Vector3.zero,
@@ -290,8 +292,20 @@ public class Domino : MonoBehaviour
                 easedT
             );
 
+            // Reveal around the middle of the disappearance.
+            if (!painted && t >= 0.5f)
+            {
+                painted = true;
+                PaintOriginalFootprint();
+            }
+
             yield return null;
         }
+
+        // Safety: make sure it was painted even if
+        // fadeDuration was extremely short.
+        if (!painted)
+            PaintOriginalFootprint();
 
         transform.localScale = Vector3.zero;
         transform.position = endPosition;

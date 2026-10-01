@@ -160,6 +160,6 @@ MonoBehaviour:
   canStartChain: 1
   pushForce: 2
   activationDistance: 0.22
-  fadeDuration: 0.25
+  fadeDuration: 0.15
   revealLength: 0.35
   revealWidth: 0.25
