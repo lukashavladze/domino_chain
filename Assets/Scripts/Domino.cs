@@ -45,6 +45,8 @@ public class Domino : MonoBehaviour
     private Vector3 originalForward;
     private Quaternion originalRotation;
 
+    private Vector3 fallDirection;
+
 
     public bool HasStarted => hasStarted;
 
@@ -107,12 +109,24 @@ public class Domino : MonoBehaviour
         if (RevealPainter.Instance == null)
             return;
 
+        Vector3 direction = fallDirection;
+
+        if (direction.sqrMagnitude < 0.001f)
+            direction = originalForward;
+
+        direction.y = 0f;
+        direction.Normalize();
+
+        Vector3 revealPosition =
+            originalPosition +
+            direction * (revealLength * 0.5f);
+
         RevealPainter.Instance.Paint(
-            originalPosition,
-            originalForward,
+            revealPosition,
+            direction,
             new Vector2(
-                revealLength,
-                revealWidth
+                revealWidth,
+                revealLength
             )
         );
     }
@@ -127,9 +141,10 @@ public class Domino : MonoBehaviour
         hasStarted = true;
         nextActivated = false;
 
+        fallDirection = direction.normalized;
+
         rb.isKinematic = false;
 
-        // ONLY the manually started domino receives a push.
         rb.AddForce(
             direction.normalized * pushForce,
             ForceMode.Impulse
@@ -141,35 +156,30 @@ public class Domino : MonoBehaviour
             StartCoroutine(FadeOut());
         }
 
-        // Watch for the next domino.
         StartCoroutine(ActivateNextBeforeContact());
     }
 
 
-    private void ActivateFromPrevious()
+   private void ActivateFromPrevious(Vector3 direction)
+{
+    if (hasStarted)
+        return;
+
+    hasStarted = true;
+    nextActivated = false;
+
+    fallDirection = direction.normalized;
+
+    rb.isKinematic = false;
+
+    if (!fadeScheduled)
     {
-        if (hasStarted)
-            return;
-
-        hasStarted = true;
-        nextActivated = false;
-
-        // Become a normal physics object.
-        rb.isKinematic = false;
-
-        // IMPORTANT:
-        // NO AddForce here.
-        // Previous domino will physically hit this domino.
-
-        if (!fadeScheduled)
-        {
-            fadeScheduled = true;
-            StartCoroutine(FadeOut());
-        }
-
-        // This domino now prepares the following domino.
-        StartCoroutine(ActivateNextBeforeContact());
+        fadeScheduled = true;
+        StartCoroutine(FadeOut());
     }
+
+    StartCoroutine(ActivateNextBeforeContact());
+}
 
     private IEnumerator ActivateNextBeforeContact()
     {
@@ -199,7 +209,16 @@ public class Domino : MonoBehaviour
                 {
                     nextActivated = true;
 
-                    next.ActivateFromPrevious();
+                    Vector3 direction =
+     next.originalPosition -
+     originalPosition;
+
+                    direction.y = 0f;
+
+                    if (direction.sqrMagnitude > 0.001f)
+                        direction.Normalize();
+
+                    next.ActivateFromPrevious(direction);
 
                     yield break;
                 }
