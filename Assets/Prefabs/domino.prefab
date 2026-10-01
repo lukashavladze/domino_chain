@@ -156,9 +156,10 @@ MonoBehaviour:
   ownerLine: {fileID: 0}
   standingAngle: 30
   nextDominoes: []
+  gravityMultiplier: 2
   canStartChain: 1
   pushForce: 2
   activationDistance: 0.22
-  fadeDuration: 0.01
+  fadeDuration: 0.4
   revealLength: 0.35
   revealWidth: 0.25

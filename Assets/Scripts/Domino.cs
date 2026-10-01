@@ -15,6 +15,9 @@ public class Domino : MonoBehaviour
     [Header("Connections")]
     public List<Domino> nextDominoes = new();
 
+    [Header("Fall Physics")]
+    [SerializeField] private float gravityMultiplier = 1.5f;
+
     [Header("Gameplay")]
     public bool canStartChain;
 
@@ -67,6 +70,17 @@ public class Domino : MonoBehaviour
         }
     }
 
+
+    private void FixedUpdate()
+    {
+        if (rb == null || rb.isKinematic)
+            return;
+
+        rb.AddForce(
+            Physics.gravity * (gravityMultiplier - 1f),
+            ForceMode.Acceleration
+        );
+    }
     public bool IsStanding()
     {
         if (hasStarted)
@@ -223,7 +237,7 @@ public class Domino : MonoBehaviour
 
     private IEnumerator FadeOut()
     {
-        yield return new WaitForSeconds(1f);
+        yield return new WaitForSeconds(1.8f);
 
         // Reveal the image underneath this domino.
         PaintOriginalFootprint();
@@ -231,34 +245,37 @@ public class Domino : MonoBehaviour
         Vector3 startScale = transform.localScale;
         Vector3 startPosition = transform.position;
 
+        Vector3 endPosition = startPosition + Vector3.down * 0.1f;
+
         float timer = 0f;
 
         while (timer < fadeDuration)
         {
             timer += Time.deltaTime;
 
-            float t = Mathf.Clamp01(
-                timer / fadeDuration
-            );
+            float t = Mathf.Clamp01(timer / fadeDuration);
+
+            // Smooth fade instead of linear shrink.
+            // Keeps the beginning subtle and makes the ending faster.
+            float easedT = t * t * (3f - 2f * t);
 
             transform.localScale = Vector3.Lerp(
                 startScale,
                 Vector3.zero,
-                t
+                easedT
             );
 
             transform.position = Vector3.Lerp(
                 startPosition,
-                startPosition + Vector3.down * 0.1f,
-                t
+                endPosition,
+                easedT
             );
 
             yield return null;
         }
 
-        // DON'T Destroy(gameObject).
-
         transform.localScale = Vector3.zero;
+        transform.position = endPosition;
 
         rb.isKinematic = true;
         rb.linearVelocity = Vector3.zero;
