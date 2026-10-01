@@ -106,6 +106,22 @@ public class GridBoard
                );
     }
 
+    public Vector2Int WorldToCell(Vector3 worldPosition)
+{
+    Vector3 local =
+        worldPosition - origin;
+
+    int x =
+        Mathf.RoundToInt(
+            local.x / cellSize);
+
+    int y =
+        Mathf.RoundToInt(
+            local.z / cellSize);
+
+    return new Vector2Int(x, y);
+}
+
     // ---------------------------------------------------------
     // DEBUG
     // ---------------------------------------------------------

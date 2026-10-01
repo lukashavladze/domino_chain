@@ -18,6 +18,14 @@ public class ProceduralLevelGenerator : MonoBehaviour
         TopLeftToBottomRight,
         BottomRightToTopLeft
     }
+    private enum PathShape
+    {
+        Straight,
+        Arc,
+        HalfCircle,
+        Circle
+    }
+
     // =========================================================
     // LEVEL
     // =========================================================
@@ -159,7 +167,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
     [Range(0f, 1f)]
     [SerializeField]
-    private float targetBoardFill = 0.75f;
+    private float targetBoardFill = 1f;
 
     [Min(10)]
     [SerializeField]
@@ -176,6 +184,35 @@ public class ProceduralLevelGenerator : MonoBehaviour
     [Tooltip("Allow 45 degree diagonal lines.")]
     [SerializeField]
     private bool allowDiagonalLines = true;
+
+    [Header("Curved Path Generation")]
+
+    [Tooltip("Allow curved arc-shaped lines.")]
+    [SerializeField]
+    private bool allowArcLines = true;
+
+    [Tooltip("Allow half-circle lines.")]
+    [SerializeField]
+    private bool allowHalfCircleLines = true;
+
+    [Tooltip("Allow full-circle lines.")]
+    [SerializeField]
+    private bool allowCircleLines = true;
+
+    [Tooltip("Chance that a generated line will try to be curved instead of straight.")]
+    [Range(0f, 1f)]
+    [SerializeField]
+    private float curvedLineChance = 0.60f;
+
+    [Tooltip("Minimum radius of generated curves, measured in grid cells.")]
+    [Min(2)]
+    [SerializeField]
+    private int minCurveRadius = 3;
+
+    [Tooltip("Maximum radius of generated curves, measured in grid cells.")]
+    [Min(2)]
+    [SerializeField]
+    private int maxCurveRadius = 6;
 
 
     // =========================================================
@@ -562,8 +599,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
         int targetOccupiedCells =
             Mathf.RoundToInt(
-                totalCells * targetBoardFill
-            );
+                totalCells * targetBoardFill);
 
         int occupiedCells = 0;
 
@@ -575,29 +611,84 @@ public class ProceduralLevelGenerator : MonoBehaviour
         {
             attempts++;
 
-            LineDirection direction =
+            // =============================================
+            // TRY CURVED LINE
+            // =============================================
+
+            bool tryCurved =
+                Random.value < curvedLineChance &&
+                (
+                    allowArcLines ||
+                    allowHalfCircleLines ||
+                    allowCircleLines
+                );
+
+            if (tryCurved)
+            {
+                PathShape shape =
+                    GetRandomPathShape();
+
+                CurvedPath curvedPath =
+                    TryCreateCurvedPath(shape);
+
+                if (curvedPath == null ||
+                    curvedPath.positions.Count < 2)
+                {
+                    continue;
+                }
+
+                if (!IsCurvedCandidateEndSafe(
+                        curvedPath))
+                {
+                    continue;
+                }
+
+                DominoLine curvedLine =
+                    CreateCurvedProceduralLine(
+                        curvedPath,
+                        lineIndex);
+
+                if (curvedLine == null)
+                    continue;
+
+                generatedLines.Add(
+                    curvedLine);
+
+                lineIndex++;
+
+                occupiedCells +=
+                    curvedPath.occupiedCells.Count;
+
+                continue;
+            }
+
+            // =============================================
+            // ORIGINAL STRAIGHT GENERATION
+            // =============================================
+
+            LineDirection lineDirection =
                 GetRandomLineDirection();
 
             Vector2Int step =
-                GetDirectionStep(direction);
+                GetDirectionStep(
+                    lineDirection);
 
             int desiredLength =
                 Random.Range(
                     minDominoesPerLine,
-                    maxDominoesPerLine + 1
-                );
+                    maxDominoesPerLine + 1);
 
             if (!TryGetRandomStartCell(
-        out Vector2Int startCell))
+                    out Vector2Int startCell))
             {
                 continue;
             }
 
             List<Vector2Int> path =
-     TryCreateStraightPath(
-         startCell,
-         step,
-         desiredLength);
+                TryCreateStraightPath(
+                    startCell,
+                    step,
+                    desiredLength);
 
             if (path == null ||
                 path.Count < 2)
@@ -627,10 +718,9 @@ public class ProceduralLevelGenerator : MonoBehaviour
         }
 
         Debug.Log(
-            $"Straight path generation complete. " +
+            $"Path generation complete. " +
             $"Occupied {occupiedCells}/{totalCells} cells. " +
-            $"Attempts: {attempts}"
-        );
+            $"Attempts: {attempts}");
     }
 
     private bool IsCandidateEndSafe(
@@ -776,6 +866,224 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 available.Count
             )
         ];
+    }
+
+    private PathShape GetRandomPathShape()
+    {
+        List<PathShape> available =
+            new List<PathShape>();
+
+        if (allowArcLines)
+            available.Add(PathShape.Arc);
+
+        if (allowHalfCircleLines)
+            available.Add(PathShape.HalfCircle);
+
+        if (allowCircleLines)
+            available.Add(PathShape.Circle);
+
+        if (available.Count == 0)
+            return PathShape.Straight;
+
+        return available[
+            Random.Range(0, available.Count)
+        ];
+    }
+    private class CurvedPath
+    {
+        public List<Vector3> positions =
+            new List<Vector3>();
+
+        public List<Vector3> directions =
+            new List<Vector3>();
+
+        public List<Vector2Int> occupiedCells =
+            new List<Vector2Int>();
+    }
+
+
+    private CurvedPath TryCreateCurvedPath(
+    PathShape shape)
+    {
+        // Radius is selected in grid-cell units,
+        // then converted to actual world-space distance.
+        int radiusCells =
+            Random.Range(
+                minCurveRadius,
+                maxCurveRadius + 1);
+
+        float radius =
+            radiusCells * cellSize;
+
+        // ---------------------------------------------
+        // SELECT SWEEP
+        // ---------------------------------------------
+
+        float sweepDegrees;
+
+        switch (shape)
+        {
+            case PathShape.Arc:
+                sweepDegrees =
+                    Random.Range(70f, 140f);
+                break;
+
+            case PathShape.HalfCircle:
+                sweepDegrees = 180f;
+                break;
+
+            case PathShape.Circle:
+                sweepDegrees = 360f;
+                break;
+
+            default:
+                return null;
+        }
+
+        // Random clockwise/counter-clockwise.
+        float directionSign =
+            Random.value < 0.5f
+                ? -1f
+                : 1f;
+
+        sweepDegrees *= directionSign;
+
+        float startAngle =
+            Random.Range(0f, 360f);
+
+        // ---------------------------------------------
+        // NUMBER OF DOMINOES
+        // ---------------------------------------------
+
+        float arcLength =
+            Mathf.Abs(sweepDegrees) *
+            Mathf.Deg2Rad *
+            radius;
+
+        int dominoCount =
+            Mathf.FloorToInt(
+                arcLength / cellSize);
+
+        dominoCount =
+            Mathf.Clamp(
+                dominoCount,
+                minDominoesPerLine,
+                maxDominoesPerLine);
+
+        if (dominoCount < 2)
+            return null;
+
+        // ---------------------------------------------
+        // CHOOSE CENTER
+        // ---------------------------------------------
+
+        // We deliberately choose a grid cell as center,
+        // but domino positions themselves are NOT
+        // restricted to the grid.
+        Vector2Int centerCell =
+            new Vector2Int(
+                Random.Range(0, board.Width),
+                Random.Range(0, board.Height));
+
+        Vector3 center =
+            board.CellToWorld(centerCell);
+
+        CurvedPath result =
+            new CurvedPath();
+
+        HashSet<Vector2Int> checkedCells =
+            new HashSet<Vector2Int>();
+
+        // ---------------------------------------------
+        // GENERATE SMOOTH CURVE
+        // ---------------------------------------------
+
+        for (int i = 0; i < dominoCount; i++)
+        {
+            float t;
+
+            if (shape == PathShape.Circle)
+            {
+                // Do NOT duplicate 0 and 360 degrees.
+                t = i / (float)dominoCount;
+            }
+            else
+            {
+                // Arc / half-circle should include
+                // both ends.
+                t =
+                    dominoCount <= 1
+                        ? 0f
+                        : i / (float)(dominoCount - 1);
+            }
+
+            float angleDegrees =
+                startAngle +
+                sweepDegrees * t;
+
+            float angle =
+                angleDegrees *
+                Mathf.Deg2Rad;
+
+            // -----------------------------------------
+            // EXACT WORLD POSITION
+            // -----------------------------------------
+
+            Vector3 position =
+                center +
+                new Vector3(
+                    Mathf.Cos(angle) * radius,
+                    0f,
+                    Mathf.Sin(angle) * radius);
+
+            // -----------------------------------------
+            // EXACT CURVE TANGENT
+            // -----------------------------------------
+
+            Vector3 tangent =
+                new Vector3(
+                    -Mathf.Sin(angle),
+                    0f,
+                    Mathf.Cos(angle));
+
+            tangent *= directionSign;
+
+            tangent.Normalize();
+
+            // -----------------------------------------
+            // MAP TO GRID ONLY FOR VALIDATION
+            // -----------------------------------------
+
+            Vector2Int cell =
+                board.WorldToCell(position);
+
+            if (!board.IsInside(cell))
+                return null;
+
+            // Only check each mapped cell once.
+            if (checkedCells.Add(cell))
+            {
+                if (!IsCellClearFromOtherLines(
+                        cell,
+                        segmentGapCells))
+                {
+                    return null;
+                }
+
+                result.occupiedCells.Add(cell);
+            }
+
+            result.positions.Add(position);
+            result.directions.Add(tangent);
+        }
+
+        if (result.positions.Count <
+            minDominoesPerLine)
+        {
+            return null;
+        }
+
+        return result;
     }
 
     private Vector2Int GetDirectionStep(
@@ -1042,6 +1350,214 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
 
         return line;
+    }
+
+    private DominoLine CreateCurvedProceduralLine(
+    CurvedPath path,
+    int lineIndex)
+    {
+        if (path == null ||
+            path.positions == null ||
+            path.positions.Count < 2)
+        {
+            return null;
+        }
+
+        DominoLine line =
+            Instantiate(
+                linePrefab,
+                generatedRoot);
+
+        line.name =
+            $"Generated_Curve_{lineIndex:000}";
+
+        line.useGeneratedBlocking = true;
+        line.blockedByLines.Clear();
+
+        // ---------------------------------------------
+        // RESERVE GRID SPACE
+        // ---------------------------------------------
+
+        foreach (Vector2Int cell
+                 in path.occupiedCells)
+        {
+            if (board.IsInside(cell))
+                board.Occupy(cell);
+        }
+
+        // ---------------------------------------------
+        // CREATE DOMINOES
+        // ---------------------------------------------
+
+        for (int i = 0;
+             i < path.positions.Count;
+             i++)
+        {
+            Vector3 worldPosition =
+                path.positions[i];
+
+            worldPosition.y +=
+                groundOffset;
+
+            Domino domino =
+                Instantiate(
+                    dominoPrefab,
+                    line.transform);
+
+            domino.SetRevealSize(
+                cellSize + revealOverlap);
+
+            domino.name =
+                $"Domino_{i:000}";
+
+            domino.transform.position =
+                worldPosition;
+
+            // Exact tangent calculated from the circle.
+            Vector3 direction =
+                path.directions[i];
+
+            if (direction.sqrMagnitude >
+                0.001f)
+            {
+                Quaternion rotation =
+                    Quaternion.LookRotation(
+                        direction,
+                        Vector3.up);
+
+                rotation *=
+                    Quaternion.Euler(
+                        rotationOffset);
+
+                domino.transform.rotation =
+                    rotation;
+            }
+
+            generatedDominoCount++;
+        }
+
+        line.AutoConnect();
+
+        generatedLineCount++;
+
+        return line;
+    }
+
+    private bool IsCurvedCandidateEndSafe(
+    CurvedPath path)
+    {
+        if (path == null ||
+            path.positions.Count < 2)
+        {
+            return false;
+        }
+
+        Vector3 previous =
+            path.positions[
+                path.positions.Count - 2];
+
+        Vector3 last =
+            path.positions[
+                path.positions.Count - 1];
+
+        previous.y += groundOffset;
+        last.y += groundOffset;
+
+        Vector3 direction =
+            last - previous;
+
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude < 0.001f)
+            return false;
+
+        direction.Normalize();
+
+        Collider prefabCollider =
+            dominoPrefab.GetComponentInChildren<Collider>();
+
+        if (prefabCollider == null)
+            return false;
+
+        Bounds bounds =
+            prefabCollider.bounds;
+
+        float fallReach =
+            bounds.size.y *
+            endFallReachMultiplier;
+
+        DominoFallArea candidateArea =
+            new DominoFallArea
+            {
+                start =
+                    last +
+                    direction * 0.05f,
+
+                end =
+                    last +
+                    direction * fallReach,
+
+                radius =
+                    Mathf.Max(
+                        bounds.extents.x,
+                        bounds.extents.z)
+                    + endFallPadding,
+
+                direction = direction
+            };
+
+        foreach (DominoLine existingLine
+                 in generatedLines)
+        {
+            if (existingLine == null)
+                continue;
+
+            if (!TryGetExistingLineFallArea(
+                    existingLine,
+                    out DominoFallArea existingArea))
+            {
+                continue;
+            }
+
+            if (!AreEndsFacingEachOther(
+                    candidateArea,
+                    existingArea))
+            {
+                continue;
+            }
+
+            Vector3 a =
+                candidateArea.start;
+
+            Vector3 b =
+                existingArea.start;
+
+            a.y = 0f;
+            b.y = 0f;
+
+            float distance =
+                Vector3.Distance(a, b);
+
+            float candidateReach =
+                Vector3.Distance(
+                    candidateArea.start,
+                    candidateArea.end);
+
+            float existingReach =
+                Vector3.Distance(
+                    existingArea.start,
+                    existingArea.end);
+
+            float requiredDistance =
+                candidateReach +
+                existingReach +
+                0.03f;
+
+            if (distance < requiredDistance)
+                return false;
+        }
+
+        return true;
     }
 
 
