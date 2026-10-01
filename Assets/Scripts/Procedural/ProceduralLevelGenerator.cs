@@ -643,6 +643,18 @@ public class ProceduralLevelGenerator : MonoBehaviour
                     continue;
                 }
 
+                if (!HasEnoughCurvedPhysicalClearance(
+        curvedPath))
+                {
+                    continue;
+                }
+
+                if (!HasSafeCurvedFallCorridors(
+        curvedPath))
+                {
+                    continue;
+                }
+
                 DominoLine curvedLine =
                     CreateCurvedProceduralLine(
                         curvedPath,
@@ -721,6 +733,140 @@ public class ProceduralLevelGenerator : MonoBehaviour
             $"Path generation complete. " +
             $"Occupied {occupiedCells}/{totalCells} cells. " +
             $"Attempts: {attempts}");
+    }
+
+    private bool HasSafeCurvedFallCorridors(
+    CurvedPath candidatePath)
+    {
+        if (candidatePath == null ||
+            candidatePath.positions == null ||
+            candidatePath.directions == null)
+        {
+            return false;
+        }
+
+        Collider prefabCollider =
+            dominoPrefab.GetComponentInChildren<Collider>();
+
+        if (prefabCollider == null)
+            return false;
+
+        Bounds bounds = prefabCollider.bounds;
+
+        float fallReach =
+            bounds.size.y *
+            endFallReachMultiplier;
+
+        float fallRadius =
+            Mathf.Max(
+                bounds.extents.x,
+                bounds.extents.z
+            ) + endFallPadding;
+
+        foreach (DominoLine existingLine
+                 in generatedLines)
+        {
+            if (existingLine == null ||
+                existingLine.dominoes == null)
+            {
+                continue;
+            }
+
+            foreach (Domino existingDomino
+                     in existingLine.dominoes)
+            {
+                if (existingDomino == null)
+                    continue;
+
+                Vector3 existingPosition =
+                    existingDomino.transform.position;
+
+                existingPosition.y = 0f;
+
+                for (int i = 0;
+                     i < candidatePath.positions.Count;
+                     i++)
+                {
+                    Vector3 start =
+                        candidatePath.positions[i];
+
+                    Vector3 direction =
+                        candidatePath.directions[i];
+
+                    start.y = 0f;
+                    direction.y = 0f;
+
+                    if (direction.sqrMagnitude < 0.001f)
+                        continue;
+
+                    direction.Normalize();
+
+                    Vector3 end =
+                        start +
+                        direction * fallReach;
+
+                    float distance =
+                        DistancePointToSegmentXZ(
+                            existingPosition,
+                            start,
+                            end
+                        );
+                    float existingRadius = Mathf.Max(bounds.extents.x, bounds.extents.z);
+
+                    float requiredClearance =
+                        fallRadius +
+                        existingRadius +
+                        minimumDominoClearance;
+
+                    if (distance < requiredClearance)
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private float DistancePointToSegmentXZ(
+    Vector3 point,
+    Vector3 start,
+    Vector3 end)
+    {
+        point.y = 0f;
+        start.y = 0f;
+        end.y = 0f;
+
+        Vector3 segment = end - start;
+
+        float lengthSqr =
+            segment.sqrMagnitude;
+
+        if (lengthSqr < 0.0001f)
+        {
+            return Vector3.Distance(
+                point,
+                start
+            );
+        }
+
+        float t =
+            Vector3.Dot(
+                point - start,
+                segment
+            ) / lengthSqr;
+
+        t = Mathf.Clamp01(t);
+
+        Vector3 closest =
+            start +
+            segment * t;
+
+        return Vector3.Distance(
+            point,
+            closest
+        );
     }
 
     private bool IsCandidateEndSafe(
@@ -2103,6 +2249,73 @@ public class ProceduralLevelGenerator : MonoBehaviour
             return false;
         }
 
+
+        return true;
+    }
+
+    private bool HasEnoughCurvedPhysicalClearance(
+    CurvedPath candidatePath)
+    {
+        if (candidatePath == null ||
+            candidatePath.positions == null)
+        {
+            return false;
+        }
+
+        Collider prefabCollider =
+            dominoPrefab.GetComponentInChildren<Collider>();
+
+        if (prefabCollider == null)
+            return false;
+
+        // Horizontal footprint of one standing domino.
+        float dominoRadius =
+            Mathf.Max(
+                prefabCollider.bounds.extents.x,
+                prefabCollider.bounds.extents.z
+            );
+
+        float requiredDistance =
+            dominoRadius * 2f +
+            minimumDominoClearance;
+
+        float requiredDistanceSqr =
+            requiredDistance * requiredDistance;
+
+        foreach (Vector3 candidatePosition
+                 in candidatePath.positions)
+        {
+            Vector3 candidate = candidatePosition;
+            candidate.y = 0f;
+
+            foreach (DominoLine existingLine
+                     in generatedLines)
+            {
+                if (existingLine == null ||
+                    existingLine.dominoes == null)
+                {
+                    continue;
+                }
+
+                foreach (Domino existingDomino
+                         in existingLine.dominoes)
+                {
+                    if (existingDomino == null)
+                        continue;
+
+                    Vector3 existing =
+                        existingDomino.transform.position;
+
+                    existing.y = 0f;
+
+                    if ((candidate - existing).sqrMagnitude <
+                        requiredDistanceSqr)
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
 
         return true;
     }

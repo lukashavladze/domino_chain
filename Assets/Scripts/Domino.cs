@@ -204,8 +204,12 @@ public class Domino : MonoBehaviour
                 difference.y = 0f;
 
                 float distance = difference.magnitude;
+                float allowedDistance = Mathf.Max(
+    activationDistance,
+    Vector3.Distance(originalPosition, next.originalPosition) + 0.03f
+);
 
-                if (distance <= activationDistance)
+                if (distance <= allowedDistance)
                 {
                     nextActivated = true;
 
