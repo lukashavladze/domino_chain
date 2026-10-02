@@ -156,7 +156,7 @@ MonoBehaviour:
   ownerLine: {fileID: 0}
   standingAngle: 20
   nextDominoes: []
-  gravityMultiplier: 2
+  gravityMultiplier: 3
   canStartChain: 0
   pushForce: 2
   activationDistance: 0.08

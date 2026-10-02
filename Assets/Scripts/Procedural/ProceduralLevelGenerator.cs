@@ -655,6 +655,13 @@ public class ProceduralLevelGenerator : MonoBehaviour
                     continue;
                 }
 
+                if (!HasSafeInternalCurvedFallCorridors(
+        curvedPath))
+
+                {
+                    continue;
+                }
+
                 DominoLine curvedLine =
                     CreateCurvedProceduralLine(
                         curvedPath,
@@ -735,99 +742,9 @@ public class ProceduralLevelGenerator : MonoBehaviour
             $"Attempts: {attempts}");
     }
 
-    private bool HasSafeCurvedFallCorridors(
-    CurvedPath candidatePath)
-    {
-        if (candidatePath == null ||
-            candidatePath.positions == null ||
-            candidatePath.directions == null)
-        {
-            return false;
-        }
+    
 
-        Collider prefabCollider =
-            dominoPrefab.GetComponentInChildren<Collider>();
-
-        if (prefabCollider == null)
-            return false;
-
-        Bounds bounds = prefabCollider.bounds;
-
-        float fallReach =
-            bounds.size.y *
-            endFallReachMultiplier;
-
-        float fallRadius =
-            Mathf.Max(
-                bounds.extents.x,
-                bounds.extents.z
-            ) + endFallPadding;
-
-        foreach (DominoLine existingLine
-                 in generatedLines)
-        {
-            if (existingLine == null ||
-                existingLine.dominoes == null)
-            {
-                continue;
-            }
-
-            foreach (Domino existingDomino
-                     in existingLine.dominoes)
-            {
-                if (existingDomino == null)
-                    continue;
-
-                Vector3 existingPosition =
-                    existingDomino.transform.position;
-
-                existingPosition.y = 0f;
-
-                for (int i = 0;
-                     i < candidatePath.positions.Count;
-                     i++)
-                {
-                    Vector3 start =
-                        candidatePath.positions[i];
-
-                    Vector3 direction =
-                        candidatePath.directions[i];
-
-                    start.y = 0f;
-                    direction.y = 0f;
-
-                    if (direction.sqrMagnitude < 0.001f)
-                        continue;
-
-                    direction.Normalize();
-
-                    Vector3 end =
-                        start +
-                        direction * fallReach;
-
-                    float distance =
-                        DistancePointToSegmentXZ(
-                            existingPosition,
-                            start,
-                            end
-                        );
-                    float existingRadius = Mathf.Max(bounds.extents.x, bounds.extents.z);
-
-                    float requiredClearance =
-                        fallRadius +
-                        existingRadius +
-                        minimumDominoClearance;
-
-                    if (distance < requiredClearance)
-                    {
-                        return false;
-                    }
-                }
-            }
-        }
-
-        return true;
-    }
+    
 
     private float DistancePointToSegmentXZ(
     Vector3 point,
@@ -1099,22 +1016,70 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
         // ---------------------------------------------
         // NUMBER OF DOMINOES
+        // Keep curved domino spacing consistent.
         // ---------------------------------------------
 
-        float arcLength =
+        float totalAngleRadians =
             Mathf.Abs(sweepDegrees) *
-            Mathf.Deg2Rad *
-            radius;
+            Mathf.Deg2Rad;
 
-        int dominoCount =
-            Mathf.FloorToInt(
-                arcLength / cellSize);
-
-        dominoCount =
+        // We want approximately the same world-space
+        // distance between neighboring domino CENTERS
+        // as straight lines use: cellSize.
+        //
+        // For a circle:
+        // chord = 2 * radius * sin(angleStep / 2)
+        //
+        // Solve for angleStep using desired chord = cellSize.
+        float ratio =
             Mathf.Clamp(
-                dominoCount,
-                minDominoesPerLine,
-                maxDominoesPerLine);
+                cellSize / (2f * radius),
+                0f,
+                0.9999f
+            );
+
+        float angleStepRadians =
+            2f * Mathf.Asin(ratio);
+
+        if (angleStepRadians <= 0.0001f)
+            return null;
+
+        int dominoCount;
+
+        if (shape == PathShape.Circle)
+        {
+            // Circle does not duplicate first/last point.
+            dominoCount =
+                Mathf.RoundToInt(
+                    (Mathf.PI * 2f) /
+                    angleStepRadians
+                );
+
+            dominoCount =
+                Mathf.Max(
+                    minDominoesPerLine,
+                    dominoCount
+                );
+        }
+        else
+        {
+            // Arc / half-circle includes BOTH ends.
+            int intervals =
+                Mathf.RoundToInt(
+                    totalAngleRadians /
+                    angleStepRadians
+                );
+
+            intervals = Mathf.Max(1, intervals);
+
+            dominoCount = intervals + 1;
+
+            dominoCount =
+                Mathf.Max(
+                    minDominoesPerLine,
+                    dominoCount
+                );
+        }
 
         if (dominoCount < 2)
             return null;
@@ -2320,6 +2285,210 @@ public class ProceduralLevelGenerator : MonoBehaviour
         return true;
     }
 
+    private bool HasSafeCurvedFallCorridors(CurvedPath candidatePath)
+    {
+        if (candidatePath == null ||
+            candidatePath.positions == null ||
+            candidatePath.directions == null)
+        {
+            return false;
+        }
+
+        Collider prefabCollider =
+            dominoPrefab.GetComponentInChildren<Collider>();
+
+        if (prefabCollider == null)
+            return false;
+
+        Bounds bounds =
+            prefabCollider.bounds;
+
+        // Maximum horizontal reach of a falling domino.
+        float fallReach =
+            bounds.size.y *
+            endFallReachMultiplier;
+
+        float dominoRadius =
+            Mathf.Max(
+                bounds.extents.x,
+                bounds.extents.z
+            );
+
+        float fallRadius =
+            dominoRadius +
+            endFallPadding;
+
+        // =====================================================
+        // CHECK EVERY DOMINO OF THIS CURVE
+        // AGAINST EVERY DOMINO OF EXISTING LINES
+        // =====================================================
+
+        for (int i = 0;
+             i < candidatePath.positions.Count;
+             i++)
+        {
+            Vector3 start =
+                candidatePath.positions[i];
+
+            Vector3 direction =
+                candidatePath.directions[i];
+
+            start.y = 0f;
+            direction.y = 0f;
+
+            if (direction.sqrMagnitude < 0.001f)
+                continue;
+
+            direction.Normalize();
+
+            Vector3 end =
+                start +
+                direction * fallReach;
+
+            foreach (DominoLine existingLine
+                     in generatedLines)
+            {
+                if (existingLine == null ||
+                    existingLine.dominoes == null)
+                {
+                    continue;
+                }
+
+                foreach (Domino existingDomino
+                         in existingLine.dominoes)
+                {
+                    if (existingDomino == null)
+                        continue;
+
+                    Vector3 existingPosition =
+                        existingDomino.transform.position;
+
+                    existingPosition.y = 0f;
+
+                    float distance =
+                        DistancePointToSegmentXZ(
+                            existingPosition,
+                            start,
+                            end
+                        );
+
+                    float requiredClearance =
+                        fallRadius +
+                        dominoRadius +
+                        minimumDominoClearance;
+
+                    if (distance <
+                        requiredClearance)
+                    {
+                        // This curved domino could physically
+                        // fall into another generated line.
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+
+    private bool HasSafeInternalCurvedFallCorridors(
+    CurvedPath path)
+    {
+        if (path == null ||
+            path.positions == null ||
+            path.directions == null ||
+            path.positions.Count < 3)
+        {
+            return false;
+        }
+
+        Collider prefabCollider =
+            dominoPrefab.GetComponentInChildren<Collider>();
+
+        if (prefabCollider == null)
+            return false;
+
+        Bounds bounds =
+            prefabCollider.bounds;
+
+        float fallReach =
+            bounds.size.y *
+            endFallReachMultiplier;
+
+        float dominoRadius =
+            Mathf.Max(
+                bounds.extents.x,
+                bounds.extents.z
+            );
+
+        float requiredClearance =
+            dominoRadius * 2f +
+            endFallPadding;
+
+        int count =
+            path.positions.Count;
+
+        for (int i = 0; i < count; i++)
+        {
+            Vector3 start =
+                path.positions[i];
+
+            Vector3 direction =
+                path.directions[i];
+
+            start.y = 0f;
+            direction.y = 0f;
+
+            if (direction.sqrMagnitude < 0.001f)
+                continue;
+
+            direction.Normalize();
+
+            Vector3 end =
+                start +
+                direction * fallReach;
+
+            for (int j = 0; j < count; j++)
+            {
+                if (i == j)
+                    continue;
+
+                // Immediate neighbors are SUPPOSED
+                // to interact with each other.
+                if (Mathf.Abs(i - j) <= 1)
+                    continue;
+
+                // Full circle:
+                // first and last are also neighbors.
+                bool wrapNeighbor =
+                    (i == 0 && j == count - 1) ||
+                    (j == 0 && i == count - 1);
+
+                if (wrapNeighbor)
+                    continue;
+
+                Vector3 other =
+                    path.positions[j];
+
+                other.y = 0f;
+
+                float distance =
+                    DistancePointToSegmentXZ(
+                        other,
+                        start,
+                        end
+                    );
+
+                if (distance < requiredClearance)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
 
     // =========================================================
     // GIZMOS
