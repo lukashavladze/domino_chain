@@ -47,6 +47,7 @@ public class Domino : MonoBehaviour
 
     private Vector3 fallDirection;
 
+    private Collider[] myColliders;
 
     public bool HasStarted => hasStarted;
 
@@ -54,7 +55,7 @@ public class Domino : MonoBehaviour
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
-
+        myColliders = GetComponentsInChildren<Collider>();
         originalScale = transform.localScale;
         originalPosition = transform.position;
         originalRotation = transform.rotation;
@@ -69,6 +70,56 @@ public class Domino : MonoBehaviour
         {
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
+        }
+
+        IgnoreOtherLineCollisions();
+    }
+
+    private void IgnoreOtherLineCollisions()
+    {
+        if (ownerLine == null ||
+            myColliders == null)
+        {
+            return;
+        }
+
+        Domino[] allDominoes =
+            FindObjectsByType<Domino>(
+                FindObjectsSortMode.None
+            );
+
+        foreach (Domino other in allDominoes)
+        {
+            if (other == null ||
+                other == this)
+            {
+                continue;
+            }
+
+            // Same line MUST keep normal physics collisions.
+            if (other.ownerLine == ownerLine)
+                continue;
+
+            Collider[] otherColliders =
+                other.GetComponentsInChildren<Collider>();
+
+            foreach (Collider mine in myColliders)
+            {
+                if (mine == null)
+                    continue;
+
+                foreach (Collider theirs in otherColliders)
+                {
+                    if (theirs == null)
+                        continue;
+
+                    Physics.IgnoreCollision(
+                        mine,
+                        theirs,
+                        true
+                    );
+                }
+            }
         }
     }
 

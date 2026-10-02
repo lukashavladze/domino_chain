@@ -2756,38 +2756,25 @@ public class ProceduralLevelGenerator : MonoBehaviour
             dominoPrefab.GetComponentInChildren<Collider>();
 
         if (prefabCollider == null)
-        {
-            Debug.LogError(
-                "Domino prefab needs a Collider for fall validation."
-            );
-
             return false;
-        }
 
         Bounds bounds =
             prefabCollider.bounds;
 
-        // Maximum horizontal distance a domino can reach
-        // while falling.
         float fallReach =
             bounds.size.y *
             endFallReachMultiplier;
 
-        // Horizontal physical radius of a domino.
         float dominoRadius =
             Mathf.Max(
                 bounds.extents.x,
                 bounds.extents.z
             );
 
+        // Slightly conservative physical width.
         float requiredClearance =
             dominoRadius * 2f +
-            endFallPadding +
-            minimumDominoClearance;
-
-        // =========================================================
-        // CHECK EVERY LINE
-        // =========================================================
+            endFallPadding;
 
         for (int lineAIndex = 0;
              lineAIndex < generatedLines.Count;
@@ -2803,141 +2790,170 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 continue;
             }
 
-            // =====================================================
-            // CHECK EVERY DOMINO OF LINE A
-            // =====================================================
+            bool lineAIsCurve =
+                lineA.name.StartsWith(
+                    "Generated_Curve_"
+                );
 
-            for (int dominoIndex = 0;
-                 dominoIndex < lineA.dominoes.Count;
-                 dominoIndex++)
+            for (int lineBIndex = lineAIndex + 1;
+                 lineBIndex < generatedLines.Count;
+                 lineBIndex++)
             {
-                Domino fallingDomino =
-                    lineA.dominoes[dominoIndex];
+                DominoLine lineB =
+                    generatedLines[lineBIndex];
 
-                if (fallingDomino == null)
-                    continue;
-
-                Vector3 start =
-                    fallingDomino.transform.position;
-
-                start.y = 0f;
-
-                // =================================================
-                // GET ACTUAL CHAIN DIRECTION
-                // =================================================
-
-                Vector3 fallDirection;
-
-                if (dominoIndex <
-                    lineA.dominoes.Count - 1)
-                {
-                    Domino next =
-                        lineA.dominoes[
-                            dominoIndex + 1
-                        ];
-
-                    if (next == null)
-                        continue;
-
-                    fallDirection =
-                        next.transform.position -
-                        fallingDomino.transform.position;
-                }
-                else
-                {
-                    // Last domino continues in the direction
-                    // established by the previous domino.
-                    Domino previous =
-                        lineA.dominoes[
-                            dominoIndex - 1
-                        ];
-
-                    if (previous == null)
-                        continue;
-
-                    fallDirection =
-                        fallingDomino.transform.position -
-                        previous.transform.position;
-                }
-
-                fallDirection.y = 0f;
-
-                if (fallDirection.sqrMagnitude <
-                    0.0001f)
+                if (lineB == null ||
+                    lineB.dominoes == null ||
+                    lineB.dominoes.Count < 2)
                 {
                     continue;
                 }
 
-                fallDirection.Normalize();
+                bool lineBIsCurve =
+                    lineB.name.StartsWith(
+                        "Generated_Curve_"
+                    );
 
-                Vector3 end =
-                    start +
-                    fallDirection * fallReach;
-
-                // =================================================
-                // CHECK AGAINST EVERY OTHER LINE
-                // =================================================
-
-                for (int lineBIndex = 0;
-                     lineBIndex < generatedLines.Count;
-                     lineBIndex++)
+                // IMPORTANT:
+                // Straight-vs-straight already works.
+                // Do not interfere with it.
+                if (!lineAIsCurve &&
+                    !lineBIsCurve)
                 {
-                    if (lineBIndex == lineAIndex)
-                        continue;
+                    continue;
+                }
 
-                    DominoLine lineB =
-                        generatedLines[lineBIndex];
+                // Check A falling toward B.
+                if (CanLineFallIntoOtherLine(
+                        lineA,
+                        lineB,
+                        fallReach,
+                        requiredClearance))
+                {
+                    return false;
+                }
 
-                    if (lineB == null ||
-                        lineB.dominoes == null)
-                    {
-                        continue;
-                    }
-
-                    foreach (Domino otherDomino
-                             in lineB.dominoes)
-                    {
-                        if (otherDomino == null)
-                            continue;
-
-                        Vector3 otherPosition =
-                            otherDomino.transform.position;
-
-                        otherPosition.y = 0f;
-
-                        float distance =
-                            DistancePointToSegmentXZ(
-                                otherPosition,
-                                start,
-                                end
-                            );
-
-                        if (distance <
-                            requiredClearance)
-                        {
-                            Debug.LogWarning(
-                                "REJECTING LEVEL: " +
-                                fallingDomino.name +
-                                " from " +
-                                lineA.name +
-                                " can fall into " +
-                                otherDomino.name +
-                                " from " +
-                                lineB.name +
-                                ". Distance: " +
-                                distance.ToString("F3") +
-                                " Required: " +
-                                requiredClearance.ToString("F3")
-                            );
-
-                            return false;
-                        }
-                    }
+                // Check B falling toward A.
+                if (CanLineFallIntoOtherLine(
+                        lineB,
+                        lineA,
+                        fallReach,
+                        requiredClearance))
+                {
+                    return false;
                 }
             }
         }
 
         return true;
+    }
+
+    private bool CanLineFallIntoOtherLine(
+    DominoLine fallingLine,
+    DominoLine otherLine,
+    float fallReach,
+    float requiredClearance)
+    {
+        for (int i = 0;
+             i < fallingLine.dominoes.Count;
+             i++)
+        {
+            Domino fallingDomino =
+                fallingLine.dominoes[i];
+
+            if (fallingDomino == null)
+                continue;
+
+            Vector3 direction;
+
+            // ---------------------------------------------
+            // GET REAL CHAIN DIRECTION
+            // ---------------------------------------------
+
+            if (i <
+                fallingLine.dominoes.Count - 1)
+            {
+                Domino next =
+                    fallingLine.dominoes[i + 1];
+
+                if (next == null)
+                    continue;
+
+                direction =
+                    next.transform.position -
+                    fallingDomino.transform.position;
+            }
+            else
+            {
+                Domino previous =
+                    fallingLine.dominoes[i - 1];
+
+                if (previous == null)
+                    continue;
+
+                direction =
+                    fallingDomino.transform.position -
+                    previous.transform.position;
+            }
+
+            direction.y = 0f;
+
+            if (direction.sqrMagnitude <
+                0.0001f)
+            {
+                continue;
+            }
+
+            direction.Normalize();
+
+            Vector3 start =
+                fallingDomino.transform.position;
+
+            start.y = 0f;
+
+            Vector3 end =
+                start +
+                direction * fallReach;
+
+            // ---------------------------------------------
+            // CHECK AGAINST OTHER LINE
+            // ---------------------------------------------
+
+            foreach (Domino otherDomino
+                     in otherLine.dominoes)
+            {
+                if (otherDomino == null)
+                    continue;
+
+                Vector3 otherPosition =
+                    otherDomino.transform.position;
+
+                otherPosition.y = 0f;
+
+                float distance =
+                    DistancePointToSegmentXZ(
+                        otherPosition,
+                        start,
+                        end
+                    );
+
+                if (distance <
+                    requiredClearance)
+                {
+                    Debug.LogWarning(
+                        $"CURVE COLLISION REJECTED: " +
+                        $"{fallingLine.name}/{fallingDomino.name} -> " +
+                        $"{otherLine.name}/{otherDomino.name} | " +
+                        $"Distance {distance:F3} | " +
+                        $"Required {requiredClearance:F3}"
+                    );
+
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     // =========================================================
