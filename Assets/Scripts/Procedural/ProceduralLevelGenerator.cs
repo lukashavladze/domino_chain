@@ -662,6 +662,12 @@ public class ProceduralLevelGenerator : MonoBehaviour
                     continue;
                 }
 
+                if (!HasSafeCurvedSweepAgainstOtherLines(
+        curvedPath))
+                {
+                    continue;
+                }
+
                 DominoLine curvedLine =
                     CreateCurvedProceduralLine(
                         curvedPath,
@@ -2382,6 +2388,98 @@ public class ProceduralLevelGenerator : MonoBehaviour
                     {
                         // This curved domino could physically
                         // fall into another generated line.
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private bool HasSafeCurvedSweepAgainstOtherLines(
+    CurvedPath candidatePath)
+    {
+        if (candidatePath == null ||
+            candidatePath.positions == null ||
+            candidatePath.positions.Count == 0)
+        {
+            return false;
+        }
+
+        Collider prefabCollider =
+            dominoPrefab.GetComponentInChildren<Collider>();
+
+        if (prefabCollider == null)
+            return false;
+
+        Bounds bounds =
+            prefabCollider.bounds;
+
+        // Height of the domino represents approximately how far
+        // its upper end can sweep away from its standing position.
+        float fallReach =
+            bounds.size.y *
+            endFallReachMultiplier;
+
+        float dominoHalfWidth =
+            Mathf.Max(
+                bounds.extents.x,
+                bounds.extents.z
+            );
+
+        // Do NOT use the complete fall height as a circle around
+        // the domino. That would reject almost every useful curve.
+        //
+        // We use a fraction representing the sideways swept region.
+        float sweepRadius =
+            fallReach * 0.55f +
+            dominoHalfWidth +
+            endFallPadding;
+
+        float otherRadius =
+            dominoHalfWidth;
+
+        float requiredDistance =
+            sweepRadius +
+            otherRadius +
+            minimumDominoClearance;
+
+        float requiredDistanceSqr =
+            requiredDistance *
+            requiredDistance;
+
+        foreach (Vector3 candidatePosition
+                 in candidatePath.positions)
+        {
+            Vector3 candidate =
+                candidatePosition;
+
+            candidate.y = 0f;
+
+            foreach (DominoLine existingLine
+                     in generatedLines)
+            {
+                if (existingLine == null ||
+                    existingLine.dominoes == null)
+                {
+                    continue;
+                }
+
+                foreach (Domino existingDomino
+                         in existingLine.dominoes)
+                {
+                    if (existingDomino == null)
+                        continue;
+
+                    Vector3 existing =
+                        existingDomino.transform.position;
+
+                    existing.y = 0f;
+
+                    if ((candidate - existing).sqrMagnitude <
+                        requiredDistanceSqr)
+                    {
                         return false;
                     }
                 }

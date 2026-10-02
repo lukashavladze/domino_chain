@@ -274,6 +274,47 @@ public class Domino : MonoBehaviour
         Fall(direction.normalized);
     }
 
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (!hasStarted)
+            return;
+
+        if (nextDominoes == null ||
+            nextDominoes.Count == 0)
+        {
+            return;
+        }
+
+        Domino hitDomino =
+            collision.collider.GetComponentInParent<Domino>();
+
+        if (hitDomino == null)
+            return;
+
+        // ONLY activate dominoes that are explicitly
+        // connected as our next domino.
+        if (!nextDominoes.Contains(hitDomino))
+            return;
+
+        if (hitDomino.HasStarted)
+            return;
+
+        Vector3 direction =
+            hitDomino.originalPosition -
+            originalPosition;
+
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude < 0.001f)
+            return;
+
+        direction.Normalize();
+
+        nextActivated = true;
+
+        hitDomino.ActivateFromPrevious(direction);
+    }
+
 
     private IEnumerator FadeOut()
     {
