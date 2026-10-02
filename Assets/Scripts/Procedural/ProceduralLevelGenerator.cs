@@ -2359,7 +2359,10 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 candidatePath.positions[i];
 
             Vector3 direction =
-                candidatePath.directions[i];
+    GetRuntimeCurvedFallDirection(
+        candidatePath,
+        i
+    );
 
             start.y = 0f;
             direction.y = 0f;
@@ -2562,7 +2565,10 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 path.positions[i];
 
             Vector3 direction =
-                path.directions[i];
+    GetRuntimeCurvedFallDirection(
+        path,
+        i
+    );
 
             direction.y = 0f;
 
@@ -2692,7 +2698,10 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 path.positions[i];
 
             Vector3 direction =
-                path.directions[i];
+    GetRuntimeCurvedFallDirection(
+        path,
+        i
+    );
 
             start.y = 0f;
             direction.y = 0f;
@@ -2758,30 +2767,27 @@ public class ProceduralLevelGenerator : MonoBehaviour
         if (prefabCollider == null)
             return false;
 
-        Bounds bounds =
-            prefabCollider.bounds;
+        Bounds bounds = prefabCollider.bounds;
 
         float fallReach =
             bounds.size.y *
             endFallReachMultiplier;
 
+        // Horizontal size of standing domino.
         float dominoRadius =
             Mathf.Max(
                 bounds.extents.x,
                 bounds.extents.z
             );
 
-        // Slightly conservative physical width.
-        float requiredClearance =
-            dominoRadius * 2f +
-            endFallPadding;
+        
 
-        for (int lineAIndex = 0;
-             lineAIndex < generatedLines.Count;
-             lineAIndex++)
+        for (int a = 0;
+             a < generatedLines.Count;
+             a++)
         {
             DominoLine lineA =
-                generatedLines[lineAIndex];
+                generatedLines[a];
 
             if (lineA == null ||
                 lineA.dominoes == null ||
@@ -2790,17 +2796,17 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 continue;
             }
 
-            bool lineAIsCurve =
+            bool aIsCurve =
                 lineA.name.StartsWith(
                     "Generated_Curve_"
                 );
 
-            for (int lineBIndex = lineAIndex + 1;
-                 lineBIndex < generatedLines.Count;
-                 lineBIndex++)
+            for (int b = a + 1;
+                 b < generatedLines.Count;
+                 b++)
             {
                 DominoLine lineB =
-                    generatedLines[lineBIndex];
+                    generatedLines[b];
 
                 if (lineB == null ||
                     lineB.dominoes == null ||
@@ -2809,37 +2815,43 @@ public class ProceduralLevelGenerator : MonoBehaviour
                     continue;
                 }
 
-                bool lineBIsCurve =
+                bool bIsCurve =
                     lineB.name.StartsWith(
                         "Generated_Curve_"
                     );
 
-                // IMPORTANT:
                 // Straight-vs-straight already works.
-                // Do not interfere with it.
-                if (!lineAIsCurve &&
-                    !lineBIsCurve)
-                {
+                // Do not touch it.
+                if (!aIsCurve && !bIsCurve)
                     continue;
-                }
 
-                // Check A falling toward B.
+                // Check A falling into B.
                 if (CanLineFallIntoOtherLine(
                         lineA,
                         lineB,
-                        fallReach,
-                        requiredClearance))
+                        fallReach
+                        ))
                 {
+                    Debug.LogWarning(
+                        $"REJECT PHYSICAL CURVE COLLISION: " +
+                        $"{lineA.name} -> {lineB.name}"
+                    );
+
                     return false;
                 }
 
-                // Check B falling toward A.
+                // Check B falling into A.
                 if (CanLineFallIntoOtherLine(
                         lineB,
                         lineA,
-                        fallReach,
-                        requiredClearance))
+                        fallReach
+                        ))
                 {
+                    Debug.LogWarning(
+                        $"REJECT PHYSICAL CURVE COLLISION: " +
+                        $"{lineB.name} -> {lineA.name}"
+                    );
+
                     return false;
                 }
             }
@@ -2849,11 +2861,20 @@ public class ProceduralLevelGenerator : MonoBehaviour
     }
 
     private bool CanLineFallIntoOtherLine(
-    DominoLine fallingLine,
-    DominoLine otherLine,
-    float fallReach,
-    float requiredClearance)
+     DominoLine fallingLine,
+     DominoLine otherLine,
+     float fallReach
+     )
     {
+        if (fallingLine == null ||
+            otherLine == null ||
+            fallingLine.dominoes == null ||
+            otherLine.dominoes == null ||
+            fallingLine.dominoes.Count < 2)
+        {
+            return false;
+        }
+
         for (int i = 0;
              i < fallingLine.dominoes.Count;
              i++)
@@ -2864,22 +2885,21 @@ public class ProceduralLevelGenerator : MonoBehaviour
             if (fallingDomino == null)
                 continue;
 
-            Vector3 direction;
-
             // ---------------------------------------------
-            // GET REAL CHAIN DIRECTION
+            // ACTUAL RUNTIME FALL DIRECTION
             // ---------------------------------------------
 
-            if (i <
-                fallingLine.dominoes.Count - 1)
+            Vector3 fallDirection;
+
+            if (i == 0)
             {
                 Domino next =
-                    fallingLine.dominoes[i + 1];
+                    fallingLine.dominoes[1];
 
                 if (next == null)
                     continue;
 
-                direction =
+                fallDirection =
                     next.transform.position -
                     fallingDomino.transform.position;
             }
@@ -2891,32 +2911,55 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 if (previous == null)
                     continue;
 
-                direction =
+                fallDirection =
                     fallingDomino.transform.position -
                     previous.transform.position;
             }
 
-            direction.y = 0f;
+            fallDirection.y = 0f;
 
-            if (direction.sqrMagnitude <
-                0.0001f)
-            {
+            if (fallDirection.sqrMagnitude < 0.001f)
                 continue;
-            }
 
-            direction.Normalize();
+            fallDirection.Normalize();
+
+            Vector3 sideDirection =
+                Vector3.Cross(
+                    Vector3.up,
+                    fallDirection
+                ).normalized;
+
+            // ---------------------------------------------
+            // GET REAL COLLIDER SIZE
+            // ---------------------------------------------
+
+            Collider fallingCollider =
+                fallingDomino.GetComponentInChildren<Collider>();
+
+            if (fallingCollider == null)
+                continue;
+
+            Bounds fallingBounds =
+                fallingCollider.bounds;
+
+            float fallingHalfWidth =
+                Mathf.Min(
+                    fallingBounds.extents.x,
+                    fallingBounds.extents.z
+                );
+
+            // Small extra safety only.
+            float sideSafety =
+                fallingHalfWidth +
+                endFallPadding;
 
             Vector3 start =
-                fallingDomino.transform.position;
+                fallingCollider.bounds.center;
 
             start.y = 0f;
 
-            Vector3 end =
-                start +
-                direction * fallReach;
-
             // ---------------------------------------------
-            // CHECK AGAINST OTHER LINE
+            // CHECK OTHER LINE
             // ---------------------------------------------
 
             foreach (Domino otherDomino
@@ -2925,27 +2968,86 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 if (otherDomino == null)
                     continue;
 
+                Collider otherCollider =
+                    otherDomino.GetComponentInChildren<Collider>();
+
+                if (otherCollider == null)
+                    continue;
+
                 Vector3 otherPosition =
-                    otherDomino.transform.position;
+                    otherCollider.bounds.center;
 
                 otherPosition.y = 0f;
 
-                float distance =
-                    DistancePointToSegmentXZ(
-                        otherPosition,
-                        start,
-                        end
+                Vector3 relative =
+                    otherPosition - start;
+
+                float forward =
+                    Vector3.Dot(
+                        relative,
+                        fallDirection
                     );
 
-                if (distance <
-                    requiredClearance)
+                float sideways =
+                    Mathf.Abs(
+                        Vector3.Dot(
+                            relative,
+                            sideDirection
+                        )
+                    );
+
+                Bounds otherBounds =
+                    otherCollider.bounds;
+
+                float otherHalfWidth =
+                    Mathf.Min(
+                        otherBounds.extents.x,
+                        otherBounds.extents.z
+                    );
+
+                // -----------------------------------------
+                // FALL AREA
+                // -----------------------------------------
+
+                float allowedSideways =
+                    sideSafety +
+                    otherHalfWidth +
+                    minimumDominoClearance;
+
+                // IMPORTANT:
+                // only check objects IN FRONT of the domino.
+                //
+                // This stops the validator from rejecting
+                // nearby dominoes beside/behind the standing
+                // domino at the beginning of the fall.
+                float forwardStart =
+                    fallingHalfWidth;
+
+                float forwardEnd =
+                    fallReach +
+                    otherHalfWidth +
+                    endFallPadding;
+
+                bool insideForwardArea =
+                    forward >= forwardStart &&
+                    forward <= forwardEnd;
+
+                bool insideSideArea =
+                    sideways <= allowedSideways;
+
+                if (insideForwardArea &&
+                    insideSideArea)
                 {
                     Debug.LogWarning(
-                        $"CURVE COLLISION REJECTED: " +
-                        $"{fallingLine.name}/{fallingDomino.name} -> " +
-                        $"{otherLine.name}/{otherDomino.name} | " +
-                        $"Distance {distance:F3} | " +
-                        $"Required {requiredClearance:F3}"
+                        $"REAL FALL COLLISION: " +
+                        $"{fallingLine.name}/" +
+                        $"{fallingDomino.name} -> " +
+                        $"{otherLine.name}/" +
+                        $"{otherDomino.name} | " +
+                        $"Forward={forward:F3} " +
+                        $"Side={sideways:F3} | " +
+                        $"MaxForward={forwardEnd:F3} " +
+                        $"MaxSide={allowedSideways:F3}"
                     );
 
                     return true;
@@ -2954,6 +3056,48 @@ public class ProceduralLevelGenerator : MonoBehaviour
         }
 
         return false;
+    }
+
+    private Vector3 GetRuntimeCurvedFallDirection(
+    CurvedPath path,
+    int index)
+    {
+        if (path == null ||
+            path.positions == null ||
+            path.positions.Count < 2 ||
+            index < 0 ||
+            index >= path.positions.Count)
+        {
+            return Vector3.zero;
+        }
+
+        Vector3 direction;
+
+        // First domino is started manually.
+        // Runtime StartChain() makes it fall toward domino 1.
+        if (index == 0)
+        {
+            direction =
+                path.positions[1] -
+                path.positions[0];
+        }
+        else
+        {
+            // IMPORTANT:
+            // Every later domino receives the direction from
+            // the PREVIOUS domino when ActivateFromPrevious()
+            // is called.
+            direction =
+                path.positions[index] -
+                path.positions[index - 1];
+        }
+
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude < 0.001f)
+            return Vector3.zero;
+
+        return direction.normalized;
     }
 
     // =========================================================
