@@ -389,6 +389,22 @@ public class ProceduralLevelGenerator : MonoBehaviour
             }
 
             // ---------------------------------------------
+            // FINAL PHYSICAL FALL VALIDATION
+            // ---------------------------------------------
+
+            if (!ValidateNoCrossLineFallCollisions())
+            {
+                Debug.LogWarning(
+                    $"INVALID PHYSICAL LAYOUT | " +
+                    $"Attempt {attempt + 1} | " +
+                    $"Seed {seed} | Regenerating..."
+                );
+
+                continue;
+            }
+
+
+            // ---------------------------------------------
             // CALCULATE REAL GEOMETRIC BLOCKERS
             // ---------------------------------------------
 
@@ -1502,6 +1518,12 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 board.Occupy(cell);
         }
 
+        // Reserve the physical area that these curved
+        // dominoes will sweep through when they fall.
+        // This prevents FUTURE generated lines from
+        // entering the curve's fall corridor.
+        ReserveCurvedFallSpace(path);
+
         // ---------------------------------------------
         // CREATE DOMINOES
         // ---------------------------------------------
@@ -2489,6 +2511,143 @@ public class ProceduralLevelGenerator : MonoBehaviour
         return true;
     }
 
+    private void ReserveCurvedFallSpace(
+    CurvedPath path)
+    {
+        if (path == null ||
+            path.positions == null ||
+            path.directions == null)
+        {
+            return;
+        }
+
+        Collider prefabCollider =
+            dominoPrefab.GetComponentInChildren<Collider>();
+
+        if (prefabCollider == null)
+            return;
+
+        Bounds bounds =
+            prefabCollider.bounds;
+
+        // How far the domino can physically reach while falling.
+        float fallReach =
+            bounds.size.y *
+            endFallReachMultiplier;
+
+        // Small sideways safety around the falling domino.
+        float halfWidth =
+            Mathf.Max(
+                bounds.extents.x,
+                bounds.extents.z
+            );
+
+        float safetyRadius =
+            halfWidth +
+            endFallPadding;
+
+        // Sample much smaller than one grid cell so
+        // we don't leave holes in the reserved corridor.
+        float sampleStep =
+            Mathf.Max(
+                cellSize * 0.25f,
+                0.02f
+            );
+
+        for (int i = 0;
+             i < path.positions.Count;
+             i++)
+        {
+            Vector3 start =
+                path.positions[i];
+
+            Vector3 direction =
+                path.directions[i];
+
+            direction.y = 0f;
+
+            if (direction.sqrMagnitude < 0.001f)
+                continue;
+
+            direction.Normalize();
+
+            int samples =
+                Mathf.CeilToInt(
+                    fallReach / sampleStep
+                );
+
+            for (int s = 0;
+                 s <= samples;
+                 s++)
+            {
+                float distance =
+                    Mathf.Min(
+                        s * sampleStep,
+                        fallReach
+                    );
+
+                Vector3 point =
+                    start +
+                    direction * distance;
+
+                Vector2Int centerCell =
+                    board.WorldToCell(point);
+
+                // Reserve enough neighboring grid cells to
+                // represent the physical width of the domino.
+                int radiusCells =
+                    Mathf.Max(
+                        0,
+                        Mathf.CeilToInt(
+                            safetyRadius /
+                            cellSize
+                        )
+                    );
+
+                for (int x = -radiusCells;
+                     x <= radiusCells;
+                     x++)
+                {
+                    for (int y = -radiusCells;
+                         y <= radiusCells;
+                         y++)
+                    {
+                        Vector2Int cell =
+                            new Vector2Int(
+                                centerCell.x + x,
+                                centerCell.y + y
+                            );
+
+                        if (!board.IsInside(cell))
+                            continue;
+
+                        // Check actual world-space distance so
+                        // corners aren't reserved unnecessarily.
+                        Vector3 cellWorld =
+                            board.CellToWorld(cell);
+
+                        Vector3 flatPoint = point;
+                        flatPoint.y = 0f;
+
+                        cellWorld.y = 0f;
+
+                        float allowedRadius =
+                            safetyRadius +
+                            cellSize * 0.5f;
+
+                        if (Vector3.Distance(
+                                cellWorld,
+                                flatPoint)
+                            <= allowedRadius)
+                        {
+                            board.Occupy(cell);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 
     private bool HasSafeInternalCurvedFallCorridors(
     CurvedPath path)
@@ -2581,6 +2740,199 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 if (distance < requiredClearance)
                 {
                     return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private bool ValidateNoCrossLineFallCollisions()
+    {
+        if (dominoPrefab == null)
+            return false;
+
+        Collider prefabCollider =
+            dominoPrefab.GetComponentInChildren<Collider>();
+
+        if (prefabCollider == null)
+        {
+            Debug.LogError(
+                "Domino prefab needs a Collider for fall validation."
+            );
+
+            return false;
+        }
+
+        Bounds bounds =
+            prefabCollider.bounds;
+
+        // Maximum horizontal distance a domino can reach
+        // while falling.
+        float fallReach =
+            bounds.size.y *
+            endFallReachMultiplier;
+
+        // Horizontal physical radius of a domino.
+        float dominoRadius =
+            Mathf.Max(
+                bounds.extents.x,
+                bounds.extents.z
+            );
+
+        float requiredClearance =
+            dominoRadius * 2f +
+            endFallPadding +
+            minimumDominoClearance;
+
+        // =========================================================
+        // CHECK EVERY LINE
+        // =========================================================
+
+        for (int lineAIndex = 0;
+             lineAIndex < generatedLines.Count;
+             lineAIndex++)
+        {
+            DominoLine lineA =
+                generatedLines[lineAIndex];
+
+            if (lineA == null ||
+                lineA.dominoes == null ||
+                lineA.dominoes.Count < 2)
+            {
+                continue;
+            }
+
+            // =====================================================
+            // CHECK EVERY DOMINO OF LINE A
+            // =====================================================
+
+            for (int dominoIndex = 0;
+                 dominoIndex < lineA.dominoes.Count;
+                 dominoIndex++)
+            {
+                Domino fallingDomino =
+                    lineA.dominoes[dominoIndex];
+
+                if (fallingDomino == null)
+                    continue;
+
+                Vector3 start =
+                    fallingDomino.transform.position;
+
+                start.y = 0f;
+
+                // =================================================
+                // GET ACTUAL CHAIN DIRECTION
+                // =================================================
+
+                Vector3 fallDirection;
+
+                if (dominoIndex <
+                    lineA.dominoes.Count - 1)
+                {
+                    Domino next =
+                        lineA.dominoes[
+                            dominoIndex + 1
+                        ];
+
+                    if (next == null)
+                        continue;
+
+                    fallDirection =
+                        next.transform.position -
+                        fallingDomino.transform.position;
+                }
+                else
+                {
+                    // Last domino continues in the direction
+                    // established by the previous domino.
+                    Domino previous =
+                        lineA.dominoes[
+                            dominoIndex - 1
+                        ];
+
+                    if (previous == null)
+                        continue;
+
+                    fallDirection =
+                        fallingDomino.transform.position -
+                        previous.transform.position;
+                }
+
+                fallDirection.y = 0f;
+
+                if (fallDirection.sqrMagnitude <
+                    0.0001f)
+                {
+                    continue;
+                }
+
+                fallDirection.Normalize();
+
+                Vector3 end =
+                    start +
+                    fallDirection * fallReach;
+
+                // =================================================
+                // CHECK AGAINST EVERY OTHER LINE
+                // =================================================
+
+                for (int lineBIndex = 0;
+                     lineBIndex < generatedLines.Count;
+                     lineBIndex++)
+                {
+                    if (lineBIndex == lineAIndex)
+                        continue;
+
+                    DominoLine lineB =
+                        generatedLines[lineBIndex];
+
+                    if (lineB == null ||
+                        lineB.dominoes == null)
+                    {
+                        continue;
+                    }
+
+                    foreach (Domino otherDomino
+                             in lineB.dominoes)
+                    {
+                        if (otherDomino == null)
+                            continue;
+
+                        Vector3 otherPosition =
+                            otherDomino.transform.position;
+
+                        otherPosition.y = 0f;
+
+                        float distance =
+                            DistancePointToSegmentXZ(
+                                otherPosition,
+                                start,
+                                end
+                            );
+
+                        if (distance <
+                            requiredClearance)
+                        {
+                            Debug.LogWarning(
+                                "REJECTING LEVEL: " +
+                                fallingDomino.name +
+                                " from " +
+                                lineA.name +
+                                " can fall into " +
+                                otherDomino.name +
+                                " from " +
+                                lineB.name +
+                                ". Distance: " +
+                                distance.ToString("F3") +
+                                " Required: " +
+                                requiredClearance.ToString("F3")
+                            );
+
+                            return false;
+                        }
+                    }
                 }
             }
         }
