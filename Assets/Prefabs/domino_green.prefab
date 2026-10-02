@@ -158,7 +158,7 @@ MonoBehaviour:
   nextDominoes: []
   gravityMultiplier: 3
   canStartChain: 0
-  pushForce: 2
+  pushForce: 4
   activationDistance: 0.08
   fadeDuration: 0.25
   revealLength: 0.35
