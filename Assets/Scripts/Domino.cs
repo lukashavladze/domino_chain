@@ -193,29 +193,46 @@ public class Domino : MonoBehaviour
         {
             foreach (Domino next in nextDominoes)
             {
-                if (next == null)
+                if (next == null || next.hasStarted)
                     continue;
 
                 Vector3 difference =
                     next.transform.position -
                     transform.position;
 
-                // We only care about horizontal distance.
                 difference.y = 0f;
 
-                float distance = difference.magnitude;
-                float allowedDistance = Mathf.Max(
-    activationDistance,
-    Vector3.Distance(originalPosition, next.originalPosition) + 0.03f
-);
+                float currentDistance =
+                    difference.magnitude;
 
-                if (distance <= allowedDistance)
+                Vector3 originalDifference =
+                    next.originalPosition -
+                    originalPosition;
+
+                originalDifference.y = 0f;
+
+                float originalDistance =
+                    originalDifference.magnitude;
+
+                // IMPORTANT:
+                // Do not activate merely because the dominoes
+                // naturally stand close to each other.
+                //
+                // Current distance must have become noticeably
+                // smaller than their original standing distance.
+                float triggerDistance =
+                    Mathf.Max(
+                        activationDistance,
+                        originalDistance * 0.72f
+                    );
+
+                if (currentDistance <= triggerDistance)
                 {
                     nextActivated = true;
 
                     Vector3 direction =
-     next.originalPosition -
-     originalPosition;
+                        next.originalPosition -
+                        originalPosition;
 
                     direction.y = 0f;
 

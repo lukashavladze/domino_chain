@@ -159,7 +159,7 @@ MonoBehaviour:
   gravityMultiplier: 2
   canStartChain: 1
   pushForce: 2
-  activationDistance: 0.3
-  fadeDuration: 0.15
+  activationDistance: 0.08
+  fadeDuration: 0.25
   revealLength: 0.35
   revealWidth: 0.25
