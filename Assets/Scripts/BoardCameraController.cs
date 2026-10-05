@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem;
 
 public class BoardCameraController : MonoBehaviour
@@ -29,6 +29,7 @@ public class BoardCameraController : MonoBehaviour
 
     private float lastTouchDistance;
 
+
     [Header("90 Degree Orbit")]
     [SerializeField] private float rotationDuration = 0.35f;
 
@@ -45,35 +46,41 @@ public class BoardCameraController : MonoBehaviour
                 targetCamera.transform.localPosition;
         }
     }
+    // თუ გვინდა იმოძრაოს გვერდებში და ზევით ქვევით ბოარდ-მა ეს აფდეითი გავააქტიუროთ და მეორე გავაუქმოთ
+    //private void Update()
+    //{
+    //    HandleKeyboard();
+    //    HandleMouse();
+    //    HandleTouch();
+
+    //    ClampPosition();
+    //}
 
     private void Update()
     {
-        HandleKeyboard();
-        HandleMouse();
-        HandleTouch();
+        HandleRotationInput();
+        HandleZoom();
+    }
 
-        ClampPosition();
+    private void HandleRotationInput()
+    {
+        if (Keyboard.current == null)
+            return;
+
+        if (Keyboard.current.qKey.wasPressedThisFrame)
+        {
+            RotateLeft();
+        }
+
+        if (Keyboard.current.eKey.wasPressedThisFrame)
+        {
+            RotateRight();
+        }
     }
 
     // =========================================================
     // KEYBOARD
     // =========================================================
-    private void LateUpdate()
-    {
-        if (Mouse.current == null)
-            return;
-
-        Vector2 scroll = Mouse.current.scroll.ReadValue();
-
-        if (Mathf.Abs(scroll.y) < 0.01f)
-            return;
-
-        Debug.Log("CAMERA SCROLL DETECTED: " + scroll.y);
-
-        float direction = Mathf.Sign(scroll.y);
-
-        Zoom(-direction * mouseZoomSpeed);
-    }
     private void HandleKeyboard()
     {
         if (Keyboard.current == null)
@@ -165,6 +172,84 @@ public class BoardCameraController : MonoBehaviour
         }
     }
 
+    private void HandleZoom()
+    {
+        if (targetCamera == null)
+            return;
+
+        // ==========================
+        // MOUSE WHEEL
+        // ==========================
+
+        if (Mouse.current != null)
+        {
+            float scroll =
+                Mouse.current.scroll.ReadValue().y;
+
+            if (Mathf.Abs(scroll) > 0.01f)
+            {
+                float direction =
+                    Mathf.Sign(scroll);
+
+                ZoomOrthographic(
+                    -direction * mouseZoomSpeed
+                );
+            }
+        }
+
+        // ==========================
+        // KEYBOARD + / -
+        // ==========================
+
+        if (Keyboard.current != null)
+        {
+            if (Keyboard.current.equalsKey.wasPressedThisFrame ||
+                Keyboard.current.numpadPlusKey.wasPressedThisFrame)
+            {
+                ZoomOrthographic(-mouseZoomSpeed);
+            }
+
+            if (Keyboard.current.minusKey.wasPressedThisFrame ||
+                Keyboard.current.numpadMinusKey.wasPressedThisFrame)
+            {
+                ZoomOrthographic(mouseZoomSpeed);
+            }
+        }
+    }
+
+    private void ZoomIn()
+
+    {
+        if (targetCamera == null)
+            return;
+
+        if (targetCamera.orthographic)
+        {
+            targetCamera.orthographicSize =
+                Mathf.Clamp(
+                    targetCamera.orthographicSize - mouseZoomSpeed,
+                    minZoom,
+                    maxZoom
+                );
+        }
+    }
+
+    private void ZoomOut()
+    {
+        if (targetCamera == null)
+            return;
+
+        if (targetCamera.orthographic)
+        {
+            targetCamera.orthographicSize =
+                Mathf.Clamp(
+                    targetCamera.orthographicSize + mouseZoomSpeed,
+                    minZoom,
+                    maxZoom
+                );
+        }
+    }
+
     // =========================================================
     // TOUCH
     // =========================================================
@@ -202,7 +287,7 @@ public class BoardCameraController : MonoBehaviour
                 float difference =
                     distance - lastTouchDistance;
 
-                Zoom(
+                ZoomOrthographic(
                     -difference *
                     touchZoomSpeed);
             }
@@ -266,33 +351,20 @@ public class BoardCameraController : MonoBehaviour
     // =========================================================
     // ZOOM
     // =========================================================
-
-    private void Zoom(float amount)
+    private void ZoomOrthographic(float amount)
     {
         if (targetCamera == null)
             return;
 
-        Vector3 localPosition =
-            targetCamera.transform.localPosition;
-
-        float currentDistance =
-            localPosition.magnitude;
-
-        if (currentDistance < 0.001f)
+        if (!targetCamera.orthographic)
             return;
 
-        float newDistance =
+        targetCamera.orthographicSize =
             Mathf.Clamp(
-                currentDistance + amount,
+                targetCamera.orthographicSize + amount,
                 minZoom,
-                maxZoom);
-
-        targetCamera.transform.localPosition =
-            localPosition.normalized *
-            newDistance;
-
-        Debug.Log(
-            $"CAMERA ZOOM {currentDistance:F2} -> {newDistance:F2}");
+                maxZoom
+            );
     }
 
     // =========================================================
