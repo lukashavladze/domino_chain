@@ -63,6 +63,18 @@ public class ProceduralLevelGenerator : MonoBehaviour
     [SerializeField]
     private bool rejectOpposingEnds = true;
 
+    [Header("Real Fall Sweep Validation")]
+
+    [Tooltip("Number of orientations tested while a domino rotates from standing to fallen.")]
+    [Range(4, 16)]
+    [SerializeField]
+    private int fallSweepSamples = 6;
+
+    [Tooltip("Extra safety added to the simulated falling collider.")]
+    [Range(0f, 0.1f)]
+    [SerializeField]
+    private float fallSweepPadding = 0.015f;
+
 
     [Header("Physical Line Clearance")]
 
@@ -392,10 +404,25 @@ public class ProceduralLevelGenerator : MonoBehaviour
             // FINAL PHYSICAL FALL VALIDATION
             // ---------------------------------------------
 
-            if (!ValidateNoCrossLineFallCollisions())
+            // ---------------------------------------------
+            // CALCULATE REAL GEOMETRIC BLOCKERS FIRST
+            // ---------------------------------------------
+
+            blockingCalculator.CalculateBlocking(
+                generatedLines);
+
+            // ---------------------------------------------
+            // CHECK SOLVABILITY OF DEPENDENCIES
+            // ---------------------------------------------
+
+            bool dependencySolvable =
+                validator.IsLevelSolvable(
+                    generatedLines);
+
+            if (!dependencySolvable)
             {
                 Debug.LogWarning(
-                    $"INVALID PHYSICAL LAYOUT | " +
+                    $"INVALID DEPENDENCY LAYOUT | " +
                     $"Attempt {attempt + 1} | " +
                     $"Seed {seed} | Regenerating..."
                 );
@@ -403,21 +430,22 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 continue;
             }
 
-
             // ---------------------------------------------
-            // CALCULATE REAL GEOMETRIC BLOCKERS
-            // ---------------------------------------------
-
-            blockingCalculator.CalculateBlocking(
-                generatedLines);
-
-            // ---------------------------------------------
-            // CHECK SOLVABILITY
+            // CHECK PHYSICAL FALLS IN A PLAYABLE ORDER
             // ---------------------------------------------
 
-            bool solvable =
-                validator.IsLevelSolvable(
-                    generatedLines);
+            if (!ValidatePlayableFallOrder())
+            {
+                Debug.LogWarning(
+                    $"INVALID PLAYABLE PHYSICAL LAYOUT | " +
+                    $"Attempt {attempt + 1} | " +
+                    $"Seed {seed} | Regenerating..."
+                );
+
+                continue;
+            }
+
+            bool solvable = true;
 
             if (solvable)
             {
@@ -452,6 +480,274 @@ public class ProceduralLevelGenerator : MonoBehaviour
             $"after {maxGenerationAttempts} attempts.");
     }
 
+
+    private bool DoesPlayableDominoHitStandingLine(
+     Domino fallingDomino,
+     DominoLine fallingLine,
+     Vector3 fallDirection,
+     HashSet<DominoLine> standingLines)
+    {
+        if (fallingDomino == null ||
+            fallingLine == null ||
+            standingLines == null)
+        {
+            return false;
+        }
+
+        BoxCollider box =
+            fallingDomino.GetComponentInChildren<BoxCollider>();
+
+        if (box == null)
+            return false;
+
+
+        fallDirection.y = 0f;
+
+        if (fallDirection.sqrMagnitude <
+            0.001f)
+        {
+            return false;
+        }
+
+        fallDirection.Normalize();
+
+
+        // =====================================================
+        // COLLIDER SIZE
+        // =====================================================
+
+        Vector3 scale =
+            box.transform.lossyScale;
+
+        scale.x = Mathf.Abs(scale.x);
+        scale.y = Mathf.Abs(scale.y);
+        scale.z = Mathf.Abs(scale.z);
+
+
+        Vector3 size =
+            Vector3.Scale(
+                box.size,
+                scale);
+
+
+        Vector3 halfExtents =
+            size * 0.5f;
+
+        halfExtents.x += fallSweepPadding;
+        halfExtents.y += fallSweepPadding;
+        halfExtents.z += fallSweepPadding;
+
+
+        // =====================================================
+        // REAL COLLIDER CENTER
+        // =====================================================
+
+        Vector3 standingCenter =
+            box.transform.TransformPoint(
+                box.center);
+
+
+        // Approximate pivot at bottom of collider.
+        Vector3 pivot =
+            standingCenter -
+            box.transform.up *
+            (size.y * 0.5f);
+
+
+        // =====================================================
+        // FALL ROTATION AXIS
+        // =====================================================
+
+        Vector3 rotationAxis =
+            Vector3.Cross(
+                Vector3.up,
+                fallDirection);
+
+        if (rotationAxis.sqrMagnitude <
+            0.001f)
+        {
+            return false;
+        }
+
+        rotationAxis.Normalize();
+
+
+        int samples =
+            Mathf.Max(
+                4,
+                fallSweepSamples);
+
+
+        // =====================================================
+        // SIMULATE ROTATION FROM STANDING -> FALLEN
+        // =====================================================
+
+        for (int i = 1;
+             i <= samples;
+             i++)
+        {
+            float t =
+                i / (float)samples;
+
+            float angle =
+                Mathf.Lerp(
+                    5f,
+                    90f,
+                    t);
+
+
+            Quaternion deltaRotation =
+                Quaternion.AngleAxis(
+                    angle,
+                    rotationAxis);
+
+
+            // Rotate collider center around its bottom pivot.
+            Vector3 center =
+                pivot +
+                deltaRotation *
+                (standingCenter - pivot);
+
+
+            Quaternion rotation =
+                deltaRotation *
+                box.transform.rotation;
+
+
+            Collider[] hits =
+                Physics.OverlapBox(
+                    center,
+                    halfExtents,
+                    rotation,
+                    ~0,
+                    QueryTriggerInteraction.Ignore);
+
+
+            foreach (Collider hit in hits)
+            {
+                Domino other =
+                    hit.GetComponentInParent<Domino>();
+
+                if (other == null)
+                    continue;
+
+
+                // -----------------------------------------
+                // Ignore ourselves
+                // -----------------------------------------
+
+                if (other == fallingDomino)
+                    continue;
+
+
+                // -----------------------------------------
+                // Same line is intentional
+                // -----------------------------------------
+
+                if (other.ownerLine ==
+                    fallingLine)
+                {
+                    continue;
+                }
+
+
+                DominoLine otherLine =
+                    other.ownerLine;
+
+                if (otherLine == null)
+                    continue;
+
+
+                // =================================================
+                // MOST IMPORTANT PART:
+                //
+                // If that line was already cleared earlier
+                // in our simulated solution, its dominoes
+                // are NOT standing anymore.
+                //
+                // Therefore IGNORE it.
+                // =================================================
+
+                if (!standingLines.Contains(
+                        otherLine))
+                {
+                    continue;
+                }
+
+
+                Debug.LogWarning(
+                    $"PLAYABLE FALL COLLISION | " +
+                    $"{fallingLine.name}/" +
+                    $"{fallingDomino.name} -> " +
+                    $"{otherLine.name}/" +
+                    $"{other.name} | " +
+                    $"Angle={angle:F1}");
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private Vector3 GetActualDominoFallDirection(
+    DominoLine line,
+    int index)
+    {
+        if (line == null ||
+            line.dominoes == null ||
+            line.dominoes.Count < 2)
+        {
+            return Vector3.zero;
+        }
+
+        int count =
+            line.dominoes.Count;
+
+        Domino current =
+            line.dominoes[index];
+
+        if (current == null)
+            return Vector3.zero;
+
+        Vector3 direction;
+
+        // Normal domino:
+        // fall toward its connected next domino.
+        if (index < count - 1)
+        {
+            Domino next =
+                line.dominoes[index + 1];
+
+            if (next == null)
+                return Vector3.zero;
+
+            direction =
+                next.transform.position -
+                current.transform.position;
+        }
+        else
+        {
+            // Last domino continues in the direction
+            // established by the previous domino.
+            Domino previous =
+                line.dominoes[index - 1];
+
+            if (previous == null)
+                return Vector3.zero;
+
+            direction =
+                current.transform.position -
+                previous.transform.position;
+        }
+
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude < 0.001f)
+            return Vector3.zero;
+
+        return direction.normalized;
+    }
 
 
 
@@ -2756,109 +3052,185 @@ public class ProceduralLevelGenerator : MonoBehaviour
         return true;
     }
 
-    private bool ValidateNoCrossLineFallCollisions()
+    private bool ValidatePlayableFallOrder()
     {
-        if (dominoPrefab == null)
-            return false;
+        Physics.SyncTransforms();
 
-        Collider prefabCollider =
-            dominoPrefab.GetComponentInChildren<Collider>();
+        HashSet<DominoLine> remaining =
+            new HashSet<DominoLine>();
 
-        if (prefabCollider == null)
-            return false;
-
-        Bounds bounds = prefabCollider.bounds;
-
-        float fallReach =
-            bounds.size.y *
-            endFallReachMultiplier;
-
-        // Horizontal size of standing domino.
-        float dominoRadius =
-            Mathf.Max(
-                bounds.extents.x,
-                bounds.extents.z
-            );
-
-        
-
-        for (int a = 0;
-             a < generatedLines.Count;
-             a++)
+        foreach (DominoLine line in generatedLines)
         {
-            DominoLine lineA =
-                generatedLines[a];
+            if (line != null)
+                remaining.Add(line);
+        }
 
-            if (lineA == null ||
-                lineA.dominoes == null ||
-                lineA.dominoes.Count < 2)
+        int safetyCounter = 0;
+
+        while (remaining.Count > 0)
+        {
+            safetyCounter++;
+
+            // Absolute protection against accidental infinite loops.
+            if (safetyCounter > generatedLines.Count + 5)
             {
-                continue;
+                Debug.LogWarning(
+                    "PHYSICAL VALIDATION SAFETY BREAK");
+
+                return false;
             }
 
-            bool aIsCurve =
-                lineA.name.StartsWith(
-                    "Generated_Curve_"
-                );
 
-            for (int b = a + 1;
-                 b < generatedLines.Count;
-                 b++)
+            // =====================================================
+            // FIND CURRENTLY PLAYABLE LINES
+            // =====================================================
+
+            List<DominoLine> playableLines =
+                new List<DominoLine>();
+
+            foreach (DominoLine line in remaining)
             {
-                DominoLine lineB =
-                    generatedLines[b];
-
-                if (lineB == null ||
-                    lineB.dominoes == null ||
-                    lineB.dominoes.Count < 2)
-                {
-                    continue;
-                }
-
-                bool bIsCurve =
-                    lineB.name.StartsWith(
-                        "Generated_Curve_"
-                    );
-
-                // Straight-vs-straight already works.
-                // Do not touch it.
-                if (!aIsCurve && !bIsCurve)
+                if (line == null)
                     continue;
 
-                // Check A falling into B.
-                if (CanLineFallIntoOtherLine(
-                        lineA,
-                        lineB,
-                        fallReach
-                        ))
-                {
-                    Debug.LogWarning(
-                        $"REJECT PHYSICAL CURVE COLLISION: " +
-                        $"{lineA.name} -> {lineB.name}"
-                    );
+                bool blocked = false;
 
-                    return false;
+                foreach (DominoLine blocker
+                         in line.blockedByLines)
+                {
+                    if (blocker == null)
+                        continue;
+
+                    // Blocker is still standing.
+                    if (remaining.Contains(blocker))
+                    {
+                        blocked = true;
+                        break;
+                    }
                 }
 
-                // Check B falling into A.
-                if (CanLineFallIntoOtherLine(
-                        lineB,
-                        lineA,
-                        fallReach
-                        ))
-                {
-                    Debug.LogWarning(
-                        $"REJECT PHYSICAL CURVE COLLISION: " +
-                        $"{lineB.name} -> {lineA.name}"
-                    );
+                if (!blocked)
+                    playableLines.Add(line);
+            }
 
-                    return false;
+
+            // =====================================================
+            // NO PLAYABLE LINE = DEPENDENCY DEADLOCK
+            // =====================================================
+
+            if (playableLines.Count == 0)
+            {
+                Debug.LogWarning(
+                    $"PHYSICAL VALIDATION DEADLOCK | " +
+                    $"Remaining={remaining.Count}");
+
+                return false;
+            }
+
+
+            // =====================================================
+            // FIND ONE PLAYABLE + PHYSICALLY SAFE LINE
+            // =====================================================
+
+            DominoLine safeLine = null;
+
+            foreach (DominoLine line in playableLines)
+            {
+                if (CanPlayableLineFallSafely(
+                        line,
+                        remaining))
+                {
+                    safeLine = line;
+                    break;
                 }
+            }
+
+
+            // =====================================================
+            // PLAYABLE LINES EXIST,
+            // BUT NONE CAN PHYSICALLY FALL
+            // =====================================================
+
+            if (safeLine == null)
+            {
+                Debug.LogWarning(
+                    $"NO SAFE PLAYABLE LINE | " +
+                    $"Playable={playableLines.Count} | " +
+                    $"Remaining={remaining.Count}");
+
+                return false;
+            }
+
+
+            // =====================================================
+            // SIMULATE THIS LINE BEING COMPLETED
+            // =====================================================
+
+            remaining.Remove(safeLine);
+        }
+
+
+        Debug.Log(
+            $"PHYSICAL PLAY ORDER VALID | " +
+            $"Lines={generatedLines.Count}");
+
+        return true;
+    }
+
+    private bool CanPlayableLineFallSafely(
+    DominoLine playableLine,
+    HashSet<DominoLine> standingLines)
+    {
+        if (playableLine == null ||
+            playableLine.dominoes == null ||
+            playableLine.dominoes.Count < 2)
+        {
+            return false;
+        }
+
+        // Make sure Physics queries see the latest
+        // generated transforms.
+        Physics.SyncTransforms();
+
+        for (int i = 0;
+             i < playableLine.dominoes.Count;
+             i++)
+        {
+            Domino domino =
+                playableLine.dominoes[i];
+
+            if (domino == null)
+                continue;
+
+            Vector3 fallDirection =
+                GetActualDominoFallDirection(
+                    playableLine,
+                    i);
+
+            if (fallDirection.sqrMagnitude <
+                0.001f)
+            {
+                return false;
+            }
+
+            if (DoesPlayableDominoHitStandingLine(
+                    domino,
+                    playableLine,
+                    fallDirection,
+                    standingLines))
+            {
+                Debug.LogWarning(
+                    $"PLAYABLE LINE UNSAFE | " +
+                    $"{playableLine.name} | " +
+                    $"Domino={domino.name}");
+
+                return false;
             }
         }
 
         return true;
     }
+
 
     private bool CanLineFallIntoOtherLine(
      DominoLine fallingLine,

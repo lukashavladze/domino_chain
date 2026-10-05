@@ -19,6 +19,14 @@ public class DominoLine : MonoBehaviour
 
     public LayerMask blockerMask = ~0;
 
+    [Header("Full Fall Sweep")]
+
+    [Range(4, 16)]
+    public int fallSweepSamples = 8;
+
+    [Range(0f, 0.1f)]
+    public float fallSweepPadding = 0.030f;
+
     private bool lineStarted;
 
     [Header("Procedural Blocking")]
@@ -31,7 +39,7 @@ public class DominoLine : MonoBehaviour
 
     public bool HasStartedLine => lineStarted;
 
-
+    private float nextAvailabilityCheck;
 
 
     [Header("Visual")]
@@ -157,7 +165,13 @@ public class DominoLine : MonoBehaviour
 
     private void Update()
     {
-        RefreshAvailability();
+        if (Time.time < nextAvailabilityCheck)
+            return;
+
+        nextAvailabilityCheck = Time.time + 0.2f;
+
+        if (!lineStarted)
+            RefreshAvailability();
     }
 
     public bool CanStartLine()
@@ -249,164 +263,184 @@ public class DominoLine : MonoBehaviour
 
     private bool IsPhysicallyBlocked()
     {
+        if (dominoes == null || dominoes.Count < 2)
+            return false;
+
+        Physics.SyncTransforms();
+
+        // Check the entire chain, not only its last domino.
+        for (int i = 0; i < dominoes.Count; i++)
+        {
+            Domino domino = dominoes[i];
+
+            if (domino == null)
+                continue;
+
+            Vector3 direction =
+                GetDominoFallDirection(i);
+
+            if (direction.sqrMagnitude < 0.001f)
+                continue;
+
+            if (DoesFallSweepHitStandingLine(
+                    domino,
+                    direction))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
+    private Vector3 GetDominoFallDirection(int index)
+    {
         if (dominoes == null ||
-            dominoes.Count < 2)
+            dominoes.Count < 2 ||
+            index < 0 ||
+            index >= dominoes.Count)
         {
-            return false;
+            return Vector3.zero;
         }
 
-        Domino last =
-            dominoes[dominoes.Count - 1];
+        Domino current = dominoes[index];
 
-        Domino previous =
-            dominoes[dominoes.Count - 2];
+        if (current == null)
+            return Vector3.zero;
 
-        if (last == null ||
-            previous == null)
+        Vector3 direction;
+
+        if (index < dominoes.Count - 1)
         {
-            return false;
+            Domino next = dominoes[index + 1];
+
+            if (next == null)
+                return Vector3.zero;
+
+            direction =
+                next.transform.position -
+                current.transform.position;
+        }
+        else
+        {
+            Domino previous = dominoes[index - 1];
+
+            if (previous == null)
+                return Vector3.zero;
+
+            direction =
+                current.transform.position -
+                previous.transform.position;
         }
 
-        Collider lastCollider =
-            last.GetComponentInChildren<Collider>();
+        direction.y = 0f;
 
-        if (lastCollider == null)
-            return false;
+        return direction.sqrMagnitude > 0.001f
+            ? direction.normalized
+            : Vector3.zero;
+    }
 
-        // =====================================================
-        // FALL DIRECTION
-        // =====================================================
 
-        Vector3 fallDirection =
-            last.transform.position -
-            previous.transform.position;
-
-        fallDirection.y = 0f;
-
-        if (fallDirection.sqrMagnitude < 0.001f)
-            return false;
-
-        fallDirection.Normalize();
-
-        // =====================================================
-        // GET REAL LOCAL COLLIDER SIZE
-        // =====================================================
-
+    private bool DoesFallSweepHitStandingLine(
+        Domino fallingDomino,
+        Vector3 fallDirection)
+    {
         BoxCollider box =
-            lastCollider as BoxCollider;
+            fallingDomino.GetComponentInChildren<BoxCollider>();
 
         if (box == null)
-        {
-            Debug.LogWarning(
-                "Domino should use a BoxCollider " +
-                "for accurate blocking detection.");
-
             return false;
-        }
 
-        Vector3 scaledSize =
-            Vector3.Scale(
-                box.size,
-                box.transform.lossyScale);
+        Vector3 scale = box.transform.lossyScale;
 
-        // Your standing domino dimensions.
-        float width =
-            Mathf.Abs(scaledSize.x);
+        scale.x = Mathf.Abs(scale.x);
+        scale.y = Mathf.Abs(scale.y);
+        scale.z = Mathf.Abs(scale.z);
 
-        float height =
-            Mathf.Abs(scaledSize.y);
+        Vector3 size =
+            Vector3.Scale(box.size, scale);
 
-        float thickness =
-            Mathf.Abs(scaledSize.z);
+        Vector3 halfExtents = size * 0.5f;
 
-        // =====================================================
-        // CREATE FALLEN-DOMINO ORIENTATION
-        // =====================================================
+        halfExtents +=
+            Vector3.one * fallSweepPadding;
 
-        // The fallen domino lies along fallDirection.
-        //
-        // right = domino width
-        // forward = fallen length/height
+        Vector3 standingCenter =
+            box.transform.TransformPoint(box.center);
 
-        Vector3 right =
+        Vector3 pivot =
+            standingCenter -
+            box.transform.up * (size.y * 0.5f);
+
+        Vector3 rotationAxis =
             Vector3.Cross(
                 Vector3.up,
                 fallDirection);
 
-        right.Normalize();
+        if (rotationAxis.sqrMagnitude < 0.001f)
+            return false;
 
-        Quaternion fallenRotation =
-            Quaternion.LookRotation(
-                fallDirection,
-                Vector3.up);
+        rotationAxis.Normalize();
 
-        // =====================================================
-        // FALLEN DOMINO CENTER
-        // =====================================================
+        int samples = Mathf.Max(4, fallSweepSamples);
 
-        // When it falls, approximately half of its height
-        // extends forward from its pivot.
-
-        Vector3 fallenCenter =
-            last.transform.position +
-            fallDirection * (height * 0.5f);
-
-        // Keep the box close to the ground.
-        fallenCenter.y =
-            last.transform.position.y;
-
-        // =====================================================
-        // FALLEN BOX SIZE
-        // =====================================================
-
-        Vector3 halfExtents =
-            new Vector3(
-                width * 0.5f,
-                thickness * 0.5f,
-                height * 0.5f);
-
-        // Small tolerance.
-        //
-        // IMPORTANT:
-        // Don't make this large.
-        halfExtents.x +=
-            fallCheckPadding;
-
-        halfExtents.z +=
-            fallCheckPadding;
-
-        // =====================================================
-        // CHECK COLLISION
-        // =====================================================
-
-        Collider[] hits =
-            Physics.OverlapBox(
-                fallenCenter,
-                halfExtents,
-                fallenRotation,
-                blockerMask,
-                QueryTriggerInteraction.Ignore);
-
-        foreach (Collider hit in hits)
+        for (int i = 1; i <= samples; i++)
         {
-            Domino other =
-                hit.GetComponentInParent<Domino>();
+            float angle =
+                Mathf.Lerp(
+                    5f,
+                    90f,
+                    i / (float)samples);
 
-            if (other == null)
-                continue;
+            Quaternion deltaRotation =
+                Quaternion.AngleAxis(
+                    angle,
+                    rotationAxis);
 
-            // Ignore our own line.
-            if (other.ownerLine == this)
-                continue;
+            Vector3 center =
+                pivot +
+                deltaRotation *
+                (standingCenter - pivot);
 
-            // Already fallen/started domino doesn't block us.
-            if (other.HasStarted)
-                continue;
+            Quaternion rotation =
+                deltaRotation *
+                box.transform.rotation;
 
-            if (!other.IsStanding())
-                continue;
+            Collider[] hits =
+                Physics.OverlapBox(
+                    center,
+                    halfExtents,
+                    rotation,
+                    blockerMask,
+                    QueryTriggerInteraction.Ignore);
 
-            return true;
+            foreach (Collider hit in hits)
+            {
+                Domino other =
+                    hit.GetComponentInParent<Domino>();
+
+                if (other == null)
+                    continue;
+
+                // Ignore the falling domino itself.
+                if (other == fallingDomino)
+                    continue;
+
+                // Same-chain collisions are intentional.
+                if (other.ownerLine == this)
+                    continue;
+
+                // Already activated dominoes are not
+                // treated as standing obstacles.
+                if (other.HasStarted)
+                    continue;
+
+                if (!other.IsStanding())
+                    continue;
+
+                return true;
+            }
         }
 
         return false;
