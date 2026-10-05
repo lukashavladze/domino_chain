@@ -234,9 +234,9 @@ public class DominoLine : MonoBehaviour
 
                 if (!blocker.HasStartedLine)
                 {
-                    Debug.Log(
-                        $"{name} BLOCKED BY GENERATED DEPENDENCY: " +
-                        $"{blocker.name}");
+                    //Debug.Log(
+                    //    $"{name} BLOCKED BY GENERATED DEPENDENCY: " +
+                    //    $"{blocker.name}");
 
                     return true;
                 }
@@ -249,14 +249,14 @@ public class DominoLine : MonoBehaviour
 
         if (IsPhysicallyBlocked())
         {
-            Debug.Log(
-                $"{name} BLOCKED BY PHYSICAL CHECK");
+            //Debug.Log(
+            //    $"{name} BLOCKED BY PHYSICAL CHECK");
 
             return true;
         }
 
-        Debug.Log(
-            $"{name} IS FREE");
+        //Debug.Log(
+        //    $"{name} IS FREE");
 
         return false;
     }

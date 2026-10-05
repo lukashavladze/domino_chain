@@ -2281,9 +2281,9 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
             if (line.blockedByLines.Count == 0)
             {
-                Debug.Log(
-                    $"{line.name} = FREE"
-                );
+                //Debug.Log(
+                //    $"{line.name} = FREE"
+                //);
 
                 continue;
             }
@@ -2316,10 +2316,10 @@ public class ProceduralLevelGenerator : MonoBehaviour
             }
 
 
-            Debug.Log(
-                $"{line.name} BLOCKED BY: " +
-                blockerNames
-            );
+            //Debug.Log(
+            //    $"{line.name} BLOCKED BY: " +
+            //    blockerNames
+            //);
         }
     }
 
