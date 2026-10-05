@@ -10,6 +10,7 @@ public class GameManager : MonoBehaviour
 
     [Header("References")]
     [SerializeField] private GameUI gameUI;
+    [SerializeField] private CameraShake cameraShake;
 
     private int currentLives;
 
@@ -20,6 +21,8 @@ public class GameManager : MonoBehaviour
     public bool IsGameOver => gameOver;
 
     private bool continueUsed;
+
+    
 
     public bool ContinueUsed => continueUsed;
 
@@ -81,6 +84,12 @@ public class GameManager : MonoBehaviour
 
 
         currentLives--;
+
+        // Camera shake when a life is lost.
+        if (cameraShake != null)
+        {
+            cameraShake.Shake();
+        }
 
 
         Debug.Log(
