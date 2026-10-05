@@ -117294,6 +117294,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ee86f52d5fa87d8429b7e1ecbb940c95, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::InputManager
+  cam: {fileID: 330585545}
 --- !u!4 &953756400
 Transform:
   m_ObjectHideFlags: 0

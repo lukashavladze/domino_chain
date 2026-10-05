@@ -4,13 +4,7 @@ using System;
 
 public class InputManager : MonoBehaviour
 {
-    private Camera cam;
-
-
-    private void Awake()
-    {
-        cam = Camera.main;
-    }
+    [SerializeField] private Camera cam;
 
 
     private void Update()
