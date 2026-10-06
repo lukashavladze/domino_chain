@@ -51,8 +51,10 @@ MonoBehaviour:
   blockerMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  fallSweepSamples: 8
+  fallSweepPadding: 0.015
   useGeneratedBlocking: 0
   blockedByLines: []
   dominoRenderer: {fileID: 0}
-  normalMaterial: {fileID: 2100000, guid: 47a5473fb0c9e254780b55270cc549c6, type: 2}
+  normalMaterial: {fileID: 2100000, guid: f05f969709a6636499849de1bfed4606, type: 2}
   firstDominoMaterial: {fileID: 2100000, guid: 93753510b7e6c124495944553ec636cd, type: 2}
