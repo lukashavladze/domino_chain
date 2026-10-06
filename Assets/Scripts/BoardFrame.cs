@@ -21,14 +21,16 @@ public class BoardFrame : MonoBehaviour
 
 
     [Header("Edge Settings")]
-    [SerializeField] private float frameWidth = 0.30f;
-    [SerializeField] private float frameHeight = 0.12f;
+    [SerializeField] private float frameWidth = 0.33f;
+    [SerializeField] private float frameHeight = 0.25f;
     [SerializeField] private float gap = 0.02f;
+    [SerializeField] private float edgeExtension = 0.12f;
 
 
     [Header("Corner Settings")]
     [SerializeField] private float cornerSize = 0.45f;
-    [SerializeField] private float cornerHeight = 0.14f;
+    [SerializeField] private float cornerHeight = 0.25f;
+    [SerializeField] private float cornerInset = 0.10f;
 
 
     public void Resize()
@@ -99,7 +101,7 @@ public class BoardFrame : MonoBehaviour
 
             top.localScale =
      new Vector3(
-         groundWidth + cornerSize,
+         groundWidth - cornerSize + edgeExtension,
          frameHeight,
          frameWidth
      );
@@ -123,7 +125,7 @@ public class BoardFrame : MonoBehaviour
 
             bottom.localScale =
     new Vector3(
-        groundWidth + cornerSize,
+        groundWidth - cornerSize + edgeExtension,
         frameHeight,
         frameWidth
     );
@@ -149,9 +151,9 @@ public class BoardFrame : MonoBehaviour
      new Vector3(
          frameHeight,
          frameWidth,
-         groundDepth + cornerSize
-         
-         
+         groundDepth - cornerSize + edgeExtension
+
+
      );
         }
 
@@ -174,7 +176,7 @@ public class BoardFrame : MonoBehaviour
     new Vector3(
         frameHeight,
         frameWidth,
-        groundDepth + cornerSize
+        groundDepth - cornerSize + edgeExtension
     );
         }
 
@@ -185,7 +187,7 @@ public class BoardFrame : MonoBehaviour
 
         float cornerOffset =
             cornerSize * 0.5f +
-            gap;
+            gap - cornerInset;
 
 
         // TOP LEFT
