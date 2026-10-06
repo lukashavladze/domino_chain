@@ -105389,7 +105389,7 @@ MonoBehaviour:
   finalRevealSoftness: 0.025
   waveWidth: 0.2
   waveColor: {r: 0, g: 1, b: 0.45, a: 1}
-  waveIntensity: 5
+  waveIntensity: 2.74
 --- !u!4 &852102426
 Transform:
   m_ObjectHideFlags: 0

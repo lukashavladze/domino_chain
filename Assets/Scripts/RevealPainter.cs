@@ -309,31 +309,38 @@ public class RevealPainter : MonoBehaviour
     public IEnumerator RevealAllRadial()
     {
         if (groundMaterial == null)
-            yield break;
+        {
+            Debug.LogWarning(
+                "RevealPainter: Ground material is missing."
+            );
 
+            yield break;
+        }
+
+
+        // ==========================================
+        // START FINAL REVEAL
+        // ==========================================
 
         groundMaterial.SetFloat(
             FinalRevealActiveId,
             1f
         );
 
-        if (coverMaterial != null)
-        {
-            coverMaterial.SetFloat(
-                FinalRevealActiveId,
-                1f
-            );
-
-            coverMaterial.SetFloat(
-                FinalRevealSoftnessId,
-                finalRevealSoftness
-            );
-        }
+        groundMaterial.SetFloat(
+            FinalRevealRadiusId,
+            0f
+        );
 
         groundMaterial.SetFloat(
             FinalRevealSoftnessId,
             finalRevealSoftness
         );
+
+
+        // ==========================================
+        // GREEN WAVE - IMAGE MATERIAL
+        // ==========================================
 
         groundMaterial.SetFloat(
             WaveWidthId,
@@ -351,26 +358,70 @@ public class RevealPainter : MonoBehaviour
         );
 
 
-        /*
-         * UV center = 0.5, 0.5
-         *
-         * Distance from center to UV corner:
-         *
-         * sqrt(0.5² + 0.5²)
-         * = 0.7071
-         *
-         * Go slightly beyond it so the entire
-         * image is guaranteed to reveal.
-         */
+        // ==========================================
+        // COVER MATERIAL
+        // ==========================================
+
+        if (coverMaterial != null)
+        {
+            coverMaterial.SetFloat(
+                FinalRevealActiveId,
+                1f
+            );
+
+            coverMaterial.SetFloat(
+                FinalRevealRadiusId,
+                0f
+            );
+
+            coverMaterial.SetFloat(
+                FinalRevealSoftnessId,
+                finalRevealSoftness
+            );
+
+
+            // Green wave must ALSO be sent to cover.
+            coverMaterial.SetFloat(
+                WaveWidthId,
+                waveWidth
+            );
+
+            coverMaterial.SetColor(
+                WaveColorId,
+                waveColor
+            );
+
+            coverMaterial.SetFloat(
+                WaveIntensityId,
+                waveIntensity
+            );
+        }
+
+
+        // ==========================================
+        // MAXIMUM RADIUS
+        //
+        // UV center = 0.5, 0.5
+        // UV corner distance ~= 0.707
+        //
+        // 0.75 guarantees that the reveal passes
+        // completely beyond every corner.
+        // ==========================================
+
         const float maxRadius = 0.75f;
 
 
         float elapsed = 0f;
 
 
+        // ==========================================
+        // ANIMATE EXPANDING REVEAL
+        // ==========================================
+
         while (elapsed < finalRevealDuration)
         {
             elapsed += Time.deltaTime;
+
 
             float t =
                 Mathf.Clamp01(
@@ -396,11 +447,14 @@ public class RevealPainter : MonoBehaviour
                 );
 
 
+            // Hidden image reveal.
             groundMaterial.SetFloat(
                 FinalRevealRadiusId,
                 radius
             );
 
+
+            // Ground/cover removal + visible green wave.
             if (coverMaterial != null)
             {
                 coverMaterial.SetFloat(
@@ -414,11 +468,15 @@ public class RevealPainter : MonoBehaviour
         }
 
 
-        // Keep entire image revealed.
+        // ==========================================
+        // GUARANTEE 100% REVEAL
+        // ==========================================
+
         groundMaterial.SetFloat(
             FinalRevealRadiusId,
             1f
         );
+
 
         if (coverMaterial != null)
         {
@@ -429,11 +487,23 @@ public class RevealPainter : MonoBehaviour
         }
 
 
-        // Remove green wave after it reaches edge.
+        // ==========================================
+        // REMOVE GREEN WAVE
+        // ==========================================
+
         groundMaterial.SetFloat(
             WaveIntensityId,
             0f
         );
+
+
+        if (coverMaterial != null)
+        {
+            coverMaterial.SetFloat(
+                WaveIntensityId,
+                0f
+            );
+        }
     }
 
 
@@ -497,6 +567,11 @@ public class RevealPainter : MonoBehaviour
                 FinalRevealRadiusId,
                 0f
             );
+
+            coverMaterial.SetFloat(
+        WaveIntensityId,
+        0f
+    );
         }
     }
 

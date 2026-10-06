@@ -5,34 +5,25 @@ Shader "Custom/RevealCover"
         _BaseMap ("Ground Texture", 2D) = "white" {}
         _RevealMask ("Reveal Mask", 2D) = "black" {}
 
-        _EdgeColor ("Edge Color", Color) =
-            (1.0, 0.55, 0.08, 1.0)
-
-        _EdgeWidth ("Edge Width", Range(0.001, 0.3)) =
-            0.08
-
-        _EdgeIntensity ("Edge Intensity", Range(0, 5)) =
-            1.2
-
+        _EdgeColor ("Edge Color", Color) = (1.0, 0.55, 0.08, 1.0)
+        _EdgeWidth ("Edge Width", Range(0.001, 0.3)) = 0.08
+        _EdgeIntensity ("Edge Intensity", Range(0, 5)) = 1.2
 
         // =========================================
         // FINAL RADIAL REVEAL
         // =========================================
 
-        _FinalRevealActive (
-            "Final Reveal Active",
-            Float
-        ) = 0
+        _FinalRevealActive ("Final Reveal Active", Float) = 0
+        _FinalRevealRadius ("Final Reveal Radius", Float) = 0
+        _FinalRevealSoftness ("Final Reveal Softness", Float) = 0.025
 
-        _FinalRevealRadius (
-            "Final Reveal Radius",
-            Float
-        ) = 0
+        // =========================================
+        // GREEN WAVE
+        // =========================================
 
-        _FinalRevealSoftness (
-            "Final Reveal Softness",
-            Float
-        ) = 0.025
+        _WaveWidth ("Wave Width", Float) = 0.035
+        _WaveColor ("Wave Color", Color) = (0, 1, 0.45, 1)
+        _WaveIntensity ("Wave Intensity", Float) = 3
     }
 
 
@@ -57,13 +48,11 @@ Shader "Custom/RevealCover"
             #pragma vertex vert
             #pragma fragment frag
 
-
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
 
             TEXTURE2D(_BaseMap);
             SAMPLER(sampler_BaseMap);
-
 
             TEXTURE2D(_RevealMask);
             SAMPLER(sampler_RevealMask);
@@ -74,14 +63,16 @@ Shader "Custom/RevealCover"
                 float4 _BaseMap_ST;
 
                 float4 _EdgeColor;
-
                 float _EdgeWidth;
                 float _EdgeIntensity;
-
 
                 float _FinalRevealActive;
                 float _FinalRevealRadius;
                 float _FinalRevealSoftness;
+
+                float _WaveWidth;
+                float4 _WaveColor;
+                float _WaveIntensity;
 
             CBUFFER_END
 
@@ -100,17 +91,14 @@ Shader "Custom/RevealCover"
             };
 
 
-            Varyings vert(
-                Attributes IN)
+            Varyings vert(Attributes IN)
             {
                 Varyings OUT;
-
 
                 OUT.positionHCS =
                     TransformObjectToHClip(
                         IN.positionOS.xyz
                     );
-
 
                 OUT.uv =
                     TRANSFORM_TEX(
@@ -118,17 +106,14 @@ Shader "Custom/RevealCover"
                         _BaseMap
                     );
 
-
                 return OUT;
             }
 
 
-            half4 frag(
-                Varyings IN)
-                : SV_Target
+            half4 frag(Varyings IN) : SV_Target
             {
                 // =========================================
-                // NORMAL DOMINO MASK
+                // NORMAL DOMINO REVEAL MASK
                 // =========================================
 
                 float mask =
@@ -140,7 +125,7 @@ Shader "Custom/RevealCover"
 
 
                 // =========================================
-                // FINAL RADIAL REVEAL
+                // DISTANCE FROM CENTER
                 // =========================================
 
                 float2 center =
@@ -157,6 +142,10 @@ Shader "Custom/RevealCover"
                     );
 
 
+                // =========================================
+                // FINAL RADIAL REVEAL
+                // =========================================
+
                 float radialReveal =
                     1.0 -
                     smoothstep(
@@ -172,7 +161,47 @@ Shader "Custom/RevealCover"
 
 
                 // =========================================
-                // COMBINE BOTH
+                // GREEN EXPANDING RING
+                // =========================================
+
+                float ringDistance =
+                    abs(
+                        distanceFromCenter -
+                        _FinalRevealRadius
+                    );
+
+
+                float wave =
+                    1.0 -
+                    smoothstep(
+                        0.0,
+                        _WaveWidth,
+                        ringDistance
+                    );
+
+
+                wave *=
+                    _FinalRevealActive;
+
+
+                // =========================================
+                // IMPORTANT
+                //
+                // We keep a small OUTER part of the wave
+                // on the cover instead of clipping it away.
+                // =========================================
+
+                float outerWave =
+                    smoothstep(
+                        _FinalRevealRadius,
+                        _FinalRevealRadius +
+                        _WaveWidth,
+                        distanceFromCenter
+                    );
+
+
+                // =========================================
+                // COMBINE NORMAL + FINAL REVEAL
                 // =========================================
 
                 float reveal =
@@ -182,16 +211,26 @@ Shader "Custom/RevealCover"
                     );
 
 
-                // Anything revealed becomes a hole
-                // in the cover.
+                /*
+                 * Normal revealed areas disappear.
+                 *
+                 * But around the radial boundary we leave
+                 * the outside portion of the cover alive,
+                 * allowing the green ring to be visible.
+                 */
+
+                float shouldClip =
+                    reveal;
+
+
                 clip(
                     0.5 -
-                    reveal
+                    shouldClip
                 );
 
 
                 // =========================================
-                // NORMAL GROUND
+                // GROUND COLOR
                 // =========================================
 
                 half4 ground =
@@ -200,6 +239,17 @@ Shader "Custom/RevealCover"
                         sampler_BaseMap,
                         IN.uv
                     );
+
+
+                // =========================================
+                // GREEN WAVE COLOR
+                // =========================================
+
+                ground.rgb +=
+                    _WaveColor.rgb *
+                    wave *
+                    outerWave *
+                    _WaveIntensity;
 
 
                 return ground;
