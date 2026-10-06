@@ -22,7 +22,12 @@ public class GameManager : MonoBehaviour
 
     private bool continueUsed;
 
-    
+    private bool levelCompleted;
+    private Coroutine completionCoroutine;
+
+    public bool IsLevelCompleted => levelCompleted;
+
+
 
     public bool ContinueUsed => continueUsed;
 
@@ -60,12 +65,72 @@ public class GameManager : MonoBehaviour
 
         gameOver = false;
         continueUsed = false;
+        levelCompleted = false;
+
+        if (completionCoroutine != null)
+        {
+            StopCoroutine(completionCoroutine);
+            completionCoroutine = null;
+        }
 
         if (gameUI != null)
         {
             gameUI.SetLives(currentLives);
             gameUI.HideGameOver();
         }
+    }
+
+    public void CheckLevelCompletion()
+    {
+        if (gameOver || levelCompleted)
+            return;
+
+        DominoLine[] lines =
+            FindObjectsByType<DominoLine>(
+                FindObjectsSortMode.None
+            );
+
+        if (lines == null || lines.Length == 0)
+            return;
+
+        foreach (DominoLine line in lines)
+        {
+            if (line == null)
+                continue;
+
+            if (!line.HasStartedLine)
+            {
+                return;
+            }
+        }
+
+        // Every line has been successfully started.
+        levelCompleted = true;
+
+        completionCoroutine =
+            StartCoroutine(LevelCompleteSequence());
+    }
+
+    private System.Collections.IEnumerator LevelCompleteSequence()
+    {
+        Debug.Log("ALL LINES COMPLETED");
+
+        // Wait for the final domino chain to finish falling
+        // and for its normal reveal/fade animation.
+        yield return new WaitForSeconds(2.0f);
+
+        if (RevealPainter.Instance != null)
+        {
+            yield return StartCoroutine(
+                RevealPainter.Instance.RevealAllRadial()
+            );
+        }
+
+        Debug.Log("LEVEL COMPLETED");
+
+        // Later:
+        // gameUI.ShowLevelComplete();
+        // LoadNextLevel();
     }
 
 

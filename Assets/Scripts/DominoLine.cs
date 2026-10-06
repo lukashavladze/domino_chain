@@ -193,9 +193,17 @@ public class DominoLine : MonoBehaviour
         if (!CanStartLine())
             return false;
 
+        // Mark this line as successfully started.
         lineStarted = true;
 
+        // Start the domino chain.
         firstDomino.StartChain();
+
+        // Check whether this was the LAST remaining line.
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.CheckLevelCompletion();
+        }
 
         return true;
     }

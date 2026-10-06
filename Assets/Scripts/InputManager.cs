@@ -11,7 +11,8 @@ public class InputManager : MonoBehaviour
     {
         // No gameplay input after Game Over.
         if (GameManager.Instance != null &&
-            GameManager.Instance.IsGameOver)
+    (GameManager.Instance.IsGameOver ||
+     GameManager.Instance.IsLevelCompleted))
         {
             return;
         }
