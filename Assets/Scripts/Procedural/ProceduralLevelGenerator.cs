@@ -762,7 +762,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
     // GROUND SIZE
     // =========================================================
 
-    private Vector2 CalculateGroundSize()
+    public Vector2 CalculateGroundSize()
     {
         int step =
             (levelNumber - 1) /
@@ -843,6 +843,17 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 usableDepth / cellSize
             ) + 1
         );
+    }
+
+    public void SetGroundSize(
+    Vector2 targetSize)
+    {
+        ResizeGround(targetSize);
+
+        if (boardFrame != null)
+        {
+            boardFrame.Resize();
+        }
     }
 
 

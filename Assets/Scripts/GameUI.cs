@@ -1,4 +1,5 @@
 using System.Collections;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -13,6 +14,9 @@ public class GameUI : MonoBehaviour
 
     [Header("Game Over")]
     [SerializeField] private GameObject gameOverPanel;
+
+    [Header("Level")]
+    [SerializeField] private TMP_Text levelText;
 
 
     [Header("Mistake Feedback")]
@@ -44,6 +48,17 @@ public class GameUI : MonoBehaviour
         }
     }
 
+    // ==========================================
+    // LEVEL
+    // ==========================================
+
+    public void SetLevel(int level)
+    {
+        if (levelText == null)
+            return;
+
+        levelText.text = $"LEVEL {level}";
+    }
 
     public void PlayMistakeFeedback(int lostLifeIndex)
     {
