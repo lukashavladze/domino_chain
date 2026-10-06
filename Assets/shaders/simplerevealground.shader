@@ -4,7 +4,18 @@ Shader "Custom/SimpleRevealGround"
     {
         _MainTexture ("Hidden Image", 2D) = "white" {}
         _RevealMask ("Reveal Mask", 2D) = "black" {}
+
+        // Final radial reveal
+        _FinalRevealActive ("Final Reveal Active", Float) = 0
+        _FinalRevealRadius ("Final Reveal Radius", Float) = 0
+        _FinalRevealSoftness ("Final Reveal Softness", Float) = 0.025
+
+        // Emerald wave
+        _WaveWidth ("Wave Width", Float) = 0.025
+        _WaveColor ("Wave Color", Color) = (0, 1, 0.45, 1)
+        _WaveIntensity ("Wave Intensity", Float) = 2
     }
+
 
     SubShader
     {
@@ -15,70 +26,95 @@ Shader "Custom/SimpleRevealGround"
             "RenderPipeline"="UniversalPipeline"
         }
 
+
         Blend SrcAlpha OneMinusSrcAlpha
 
-        // Important:
-        // Transparent unrevealed parts should not write
-        // invisible geometry into the depth buffer.
         ZWrite Off
 
         Cull Back
 
+
         Pass
         {
             Name "ForwardUnlit"
+
 
             HLSLPROGRAM
 
             #pragma vertex vert
             #pragma fragment frag
 
+
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
 
             TEXTURE2D(_MainTexture);
             SAMPLER(sampler_MainTexture);
 
+
             TEXTURE2D(_RevealMask);
             SAMPLER(sampler_RevealMask);
+
 
             CBUFFER_START(UnityPerMaterial)
 
                 float4 _MainTexture_ST;
                 float4 _RevealMask_ST;
 
+                float _FinalRevealActive;
+                float _FinalRevealRadius;
+                float _FinalRevealSoftness;
+
+                float _WaveWidth;
+                float4 _WaveColor;
+                float _WaveIntensity;
+
             CBUFFER_END
+
 
             struct Attributes
             {
                 float4 positionOS : POSITION;
+
                 float2 uv : TEXCOORD0;
             };
+
 
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
+
                 float2 uv : TEXCOORD0;
             };
 
-            Varyings vert(Attributes input)
+
+            Varyings vert(
+                Attributes input)
             {
                 Varyings output;
+
 
                 VertexPositionInputs positions =
                     GetVertexPositionInputs(
                         input.positionOS.xyz
                     );
 
+
                 output.positionCS =
                     positions.positionCS;
+
 
                 output.uv =
                     input.uv;
 
+
                 return output;
             }
 
-            half4 frag(Varyings input) : SV_Target
+
+            half4 frag(
+                Varyings input)
+                : SV_Target
             {
                 // =========================================
                 // HIDDEN IMAGE
@@ -90,6 +126,7 @@ Shader "Custom/SimpleRevealGround"
                         _MainTexture
                     );
 
+
                 half4 imageColor =
                     SAMPLE_TEXTURE2D(
                         _MainTexture,
@@ -99,7 +136,7 @@ Shader "Custom/SimpleRevealGround"
 
 
                 // =========================================
-                // REVEAL MASK
+                // EXISTING DOMINO REVEAL MASK
                 // =========================================
 
                 float2 maskUV =
@@ -108,32 +145,115 @@ Shader "Custom/SimpleRevealGround"
                         _RevealMask
                     );
 
-                float reveal =
+
+                float maskReveal =
                     SAMPLE_TEXTURE2D(
                         _RevealMask,
                         sampler_RevealMask,
                         maskUV
                     ).r;
 
-                reveal =
-                    saturate(reveal);
+
+                maskReveal =
+                    saturate(
+                        maskReveal
+                    );
 
 
                 // =========================================
-                // RESULT
-                //
-                // reveal = 0 -> invisible
-                // reveal = 1 -> image fully visible
+                // FINAL RADIAL REVEAL
+                // =========================================
+
+                float2 center =
+                    float2(
+                        0.5,
+                        0.5
+                    );
+
+
+                float distanceFromCenter =
+                    distance(
+                        input.uv,
+                        center
+                    );
+
+
+                float radialReveal =
+                    1.0 -
+                    smoothstep(
+                        _FinalRevealRadius,
+                        _FinalRevealRadius +
+                        _FinalRevealSoftness,
+                        distanceFromCenter
+                    );
+
+
+                radialReveal *=
+                    _FinalRevealActive;
+
+
+                // Keep anything already revealed
+                // by dominoes.
+                float reveal =
+                    max(
+                        maskReveal,
+                        radialReveal
+                    );
+
+
+                // =========================================
+                // EMERALD WAVE RING
+                // =========================================
+
+                float waveDistance =
+                    abs(
+                        distanceFromCenter -
+                        _FinalRevealRadius
+                    );
+
+
+                float wave =
+                    1.0 -
+                    smoothstep(
+                        0.0,
+                        _WaveWidth,
+                        waveDistance
+                    );
+
+
+                wave *=
+                    _FinalRevealActive;
+
+
+                // Only show wave while this part
+                // of the image is becoming visible.
+                float3 finalRGB =
+                    imageColor.rgb;
+
+
+                finalRGB +=
+                    _WaveColor.rgb *
+                    wave *
+                    _WaveIntensity;
+
+
+                // =========================================
+                // FINAL ALPHA
                 // =========================================
 
                 float alpha =
-                    imageColor.a * reveal;
+                    imageColor.a *
+                    saturate(
+                        reveal + wave
+                    );
+
 
                 return half4(
-                    imageColor.rgb,
+                    finalRGB,
                     alpha
                 );
             }
+
 
             ENDHLSL
         }

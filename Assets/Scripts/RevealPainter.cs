@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 public class RevealPainter : MonoBehaviour
@@ -8,22 +9,44 @@ public class RevealPainter : MonoBehaviour
     [SerializeField] private Renderer groundRenderer;
     [SerializeField] private Collider groundCollider;
 
+    [Header("Reveal Cover")]
+    [SerializeField] private Renderer coverRenderer;
+
     [Header("GPU Brush")]
     [SerializeField] private Material brushMaterial;
 
     [Header("Brush Shape")]
-
     [Range(0f, 0.5f)]
     [SerializeField] private float brushSoftness = 0.05f;
-
-    private static readonly int BrushRotationId =
-    Shader.PropertyToID("_BrushRotation");
 
     [Header("Performance")]
     [SerializeField] private int maskResolution = 512;
 
+
+    [Header("Final Reveal")]
+    [SerializeField] private float finalRevealDuration = 1.0f;
+
+    [Range(0.001f, 0.2f)]
+    [SerializeField] private float finalRevealSoftness = 0.025f;
+
+    [Range(0.001f, 0.2f)]
+    [SerializeField] private float waveWidth = 0.025f;
+
+    [SerializeField]
+    private Color waveColor =
+        new Color(0f, 1f, 0.45f, 1f);
+
+    [Range(0f, 5f)]
+    [SerializeField] private float waveIntensity = 2.0f;
+
+
     private RenderTexture revealMask;
     private RenderTexture temporaryMask;
+
+    private Material groundMaterial;
+
+    private Material coverMaterial;
+
 
     private static readonly int RevealMaskId =
         Shader.PropertyToID("_RevealMask");
@@ -36,6 +59,30 @@ public class RevealPainter : MonoBehaviour
 
     private static readonly int BrushSoftnessId =
         Shader.PropertyToID("_BrushSoftness");
+
+    private static readonly int BrushRotationId =
+        Shader.PropertyToID("_BrushRotation");
+
+
+    // Final reveal shader properties
+    private static readonly int FinalRevealActiveId =
+        Shader.PropertyToID("_FinalRevealActive");
+
+    private static readonly int FinalRevealRadiusId =
+        Shader.PropertyToID("_FinalRevealRadius");
+
+    private static readonly int FinalRevealSoftnessId =
+        Shader.PropertyToID("_FinalRevealSoftness");
+
+    private static readonly int WaveWidthId =
+        Shader.PropertyToID("_WaveWidth");
+
+    private static readonly int WaveColorId =
+        Shader.PropertyToID("_WaveColor");
+
+    private static readonly int WaveIntensityId =
+        Shader.PropertyToID("_WaveIntensity");
+
 
     private void Awake()
     {
@@ -50,30 +97,65 @@ public class RevealPainter : MonoBehaviour
         CreateRenderTextures();
         ClearMask();
 
-        groundRenderer.material.SetTexture(
+        // Cache material once.
+        groundMaterial =
+            groundRenderer.material;
+
+        if (coverRenderer != null)
+        {
+            coverMaterial = coverRenderer.material;
+        }
+
+        groundMaterial.SetTexture(
             RevealMaskId,
             revealMask
         );
+
+        if (coverMaterial != null)
+        {
+            coverMaterial.SetTexture(
+                RevealMaskId,
+                revealMask
+            );
+        }
+
+        ResetFinalRevealShader();
     }
+
 
     private void CreateRenderTextures()
     {
-        revealMask = CreateMaskTexture("Reveal Mask");
-        temporaryMask = CreateMaskTexture("Temporary Reveal Mask");
+        revealMask =
+            CreateMaskTexture(
+                "Reveal Mask"
+            );
+
+        temporaryMask =
+            CreateMaskTexture(
+                "Temporary Reveal Mask"
+            );
     }
 
-    private RenderTexture CreateMaskTexture(string textureName)
+
+    private RenderTexture CreateMaskTexture(
+        string textureName)
     {
-        RenderTexture texture = new RenderTexture(
-            maskResolution,
-            maskResolution,
-            0,
-            RenderTextureFormat.R8
-        );
+        RenderTexture texture =
+            new RenderTexture(
+                maskResolution,
+                maskResolution,
+                0,
+                RenderTextureFormat.R8
+            );
 
         texture.name = textureName;
-        texture.filterMode = FilterMode.Bilinear;
-        texture.wrapMode = TextureWrapMode.Clamp;
+
+        texture.filterMode =
+            FilterMode.Bilinear;
+
+        texture.wrapMode =
+            TextureWrapMode.Clamp;
+
         texture.useMipMap = false;
         texture.autoGenerateMips = false;
 
@@ -82,12 +164,14 @@ public class RevealPainter : MonoBehaviour
         return texture;
     }
 
+
     private void ClearMask()
     {
         RenderTexture previous =
             RenderTexture.active;
 
-        RenderTexture.active = revealMask;
+        RenderTexture.active =
+            revealMask;
 
         GL.Clear(
             true,
@@ -95,21 +179,29 @@ public class RevealPainter : MonoBehaviour
             Color.black
         );
 
-        RenderTexture.active = previous;
+        RenderTexture.active =
+            previous;
     }
 
+
+    // =====================================================
+    // NORMAL DOMINO REVEAL
+    // =====================================================
+
     public void Paint(
-     Vector3 worldPosition,
-     Vector3 worldForward,
-     Vector2 worldBrushSize)
+        Vector3 worldPosition,
+        Vector3 worldForward,
+        Vector2 worldBrushSize)
     {
         Vector3 rayOrigin =
-            worldPosition + Vector3.up * 2f;
+            worldPosition +
+            Vector3.up * 2f;
 
-        Ray ray = new Ray(
-            rayOrigin,
-            Vector3.down
-        );
+        Ray ray =
+            new Ray(
+                rayOrigin,
+                Vector3.down
+            );
 
         if (!groundCollider.Raycast(
                 ray,
@@ -119,14 +211,17 @@ public class RevealPainter : MonoBehaviour
             return;
         }
 
+
         float rotation =
             Mathf.Atan2(
                 worldForward.x,
                 worldForward.z
             ) * Mathf.Rad2Deg;
 
+
         Bounds groundBounds =
-    groundRenderer.bounds;
+            groundRenderer.bounds;
+
 
         float uvWidth =
             worldBrushSize.x /
@@ -135,6 +230,7 @@ public class RevealPainter : MonoBehaviour
         float uvHeight =
             worldBrushSize.y /
             groundBounds.size.z;
+
 
         PaintUV(
             hit.textureCoord,
@@ -146,12 +242,12 @@ public class RevealPainter : MonoBehaviour
         );
     }
 
+
     private void PaintUV(
-    Vector2 uv,
-    float rotation,
-    Vector2 uvBrushSize)
+        Vector2 uv,
+        float rotation,
+        Vector2 uvBrushSize)
     {
-        // Position of this domino on the ground texture.
         brushMaterial.SetVector(
             BrushPositionId,
             new Vector4(
@@ -162,7 +258,7 @@ public class RevealPainter : MonoBehaviour
             )
         );
 
-        // Size calculated from world-space domino reveal size.
+
         brushMaterial.SetVector(
             BrushSizeId,
             new Vector4(
@@ -173,16 +269,18 @@ public class RevealPainter : MonoBehaviour
             )
         );
 
-        // Rotate brush to match domino direction.
+
         brushMaterial.SetFloat(
             BrushRotationId,
             rotation
         );
 
+
         brushMaterial.SetFloat(
             BrushSoftnessId,
             brushSoftness
         );
+
 
         Graphics.Blit(
             revealMask,
@@ -190,22 +288,218 @@ public class RevealPainter : MonoBehaviour
             brushMaterial
         );
 
+
         Graphics.Blit(
             temporaryMask,
             revealMask
         );
 
-        // Keep the ground material connected to the current mask.
-        groundRenderer.material.SetTexture(
+
+        groundMaterial.SetTexture(
             RevealMaskId,
             revealMask
         );
     }
 
+
+    // =====================================================
+    // FINAL RADIAL REVEAL
+    // =====================================================
+
+    public IEnumerator RevealAllRadial()
+    {
+        if (groundMaterial == null)
+            yield break;
+
+
+        groundMaterial.SetFloat(
+            FinalRevealActiveId,
+            1f
+        );
+
+        if (coverMaterial != null)
+        {
+            coverMaterial.SetFloat(
+                FinalRevealActiveId,
+                1f
+            );
+
+            coverMaterial.SetFloat(
+                FinalRevealSoftnessId,
+                finalRevealSoftness
+            );
+        }
+
+        groundMaterial.SetFloat(
+            FinalRevealSoftnessId,
+            finalRevealSoftness
+        );
+
+        groundMaterial.SetFloat(
+            WaveWidthId,
+            waveWidth
+        );
+
+        groundMaterial.SetColor(
+            WaveColorId,
+            waveColor
+        );
+
+        groundMaterial.SetFloat(
+            WaveIntensityId,
+            waveIntensity
+        );
+
+
+        /*
+         * UV center = 0.5, 0.5
+         *
+         * Distance from center to UV corner:
+         *
+         * sqrt(0.5² + 0.5²)
+         * = 0.7071
+         *
+         * Go slightly beyond it so the entire
+         * image is guaranteed to reveal.
+         */
+        const float maxRadius = 0.75f;
+
+
+        float elapsed = 0f;
+
+
+        while (elapsed < finalRevealDuration)
+        {
+            elapsed += Time.deltaTime;
+
+            float t =
+                Mathf.Clamp01(
+                    elapsed /
+                    finalRevealDuration
+                );
+
+
+            // Smooth acceleration/deceleration.
+            float eased =
+                Mathf.SmoothStep(
+                    0f,
+                    1f,
+                    t
+                );
+
+
+            float radius =
+                Mathf.Lerp(
+                    0f,
+                    maxRadius,
+                    eased
+                );
+
+
+            groundMaterial.SetFloat(
+                FinalRevealRadiusId,
+                radius
+            );
+
+            if (coverMaterial != null)
+            {
+                coverMaterial.SetFloat(
+                    FinalRevealRadiusId,
+                    radius
+                );
+            }
+
+
+            yield return null;
+        }
+
+
+        // Keep entire image revealed.
+        groundMaterial.SetFloat(
+            FinalRevealRadiusId,
+            1f
+        );
+
+        if (coverMaterial != null)
+        {
+            coverMaterial.SetFloat(
+                FinalRevealRadiusId,
+                1f
+            );
+        }
+
+
+        // Remove green wave after it reaches edge.
+        groundMaterial.SetFloat(
+            WaveIntensityId,
+            0f
+        );
+    }
+
+
+    // =====================================================
+    // RESET
+    // =====================================================
+
     public void ResetMask()
     {
         ClearMask();
+
+        ResetFinalRevealShader();
+
+        if (groundMaterial != null)
+        {
+            groundMaterial.SetTexture(
+                RevealMaskId,
+                revealMask
+            );
+        }
+
+        if (coverMaterial != null)
+        {
+            coverMaterial.SetTexture(
+                RevealMaskId,
+                revealMask
+            );
+        }
     }
+
+
+    private void ResetFinalRevealShader()
+    {
+        if (groundMaterial == null)
+            return;
+
+
+        groundMaterial.SetFloat(
+            FinalRevealActiveId,
+            0f
+        );
+
+        groundMaterial.SetFloat(
+            FinalRevealRadiusId,
+            0f
+        );
+
+        groundMaterial.SetFloat(
+            WaveIntensityId,
+            0f
+        );
+
+        if (coverMaterial != null)
+        {
+            coverMaterial.SetFloat(
+                FinalRevealActiveId,
+                0f
+            );
+
+            coverMaterial.SetFloat(
+                FinalRevealRadiusId,
+                0f
+            );
+        }
+    }
+
 
     private void OnDestroy()
     {
@@ -214,18 +508,26 @@ public class RevealPainter : MonoBehaviour
             Instance = null;
         }
 
-        ReleaseTexture(revealMask);
-        ReleaseTexture(temporaryMask);
+
+        ReleaseTexture(
+            revealMask
+        );
+
+        ReleaseTexture(
+            temporaryMask
+        );
     }
 
-    private void ReleaseTexture(RenderTexture texture)
+
+    private void ReleaseTexture(
+        RenderTexture texture)
     {
         if (texture == null)
-        {
             return;
-        }
+
 
         texture.Release();
+
         Destroy(texture);
     }
 }
