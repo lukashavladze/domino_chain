@@ -137,6 +137,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
     public Transform groundTransform;
     public Renderer groundRenderer;
+    public BoardFrame boardFrame;
 
     public Vector2 startingGroundSize =
         new Vector2(6f, 4f);
@@ -321,6 +322,12 @@ public class ProceduralLevelGenerator : MonoBehaviour
             CalculateGroundSize();
 
         ResizeGround(groundSize);
+
+        // Resize premium frame to match new Ground.
+        if (boardFrame != null)
+        {
+            boardFrame.Resize();
+        }
 
         int columns =
             CalculateColumns();
