@@ -110,6 +110,24 @@ public class LevelLoader : MonoBehaviour
                 generator.transform
             );
 
+        // =====================================
+        // LOAD IMAGE FOR THIS LEVEL
+        // =====================================
+
+        LevelRevealImage revealImage =
+            FindFirstObjectByType<LevelRevealImage>();
+
+        if (revealImage != null)
+        {
+            revealImage.LoadLevelImage(levelNumber);
+        }
+        else
+        {
+            Debug.LogWarning(
+                "LevelRevealImage component not found."
+            );
+        }
+
 
         currentLevelObject.name =
             $"Level_{levelNumber:0000}";

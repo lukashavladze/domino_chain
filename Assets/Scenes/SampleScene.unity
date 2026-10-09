@@ -147,7 +147,7 @@ Transform:
   m_GameObject: {fileID: 132845086}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
-  m_LocalPosition: {x: 8.095001, y: -0.075, z: 9.095}
+  m_LocalPosition: {x: 4.3450003, y: -0.075, z: 5.245001}
   m_LocalScale: {x: 0.5, y: 0.25, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1233,8 +1233,8 @@ Transform:
   m_GameObject: {fileID: 815021789}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: 0.7071068, w: 0.7071068}
-  m_LocalPosition: {x: -8.170001, y: -0.075, z: 0}
-  m_LocalScale: {x: 0.25, y: 0.3, z: 17.7}
+  m_LocalPosition: {x: -4.42, y: -0.075, z: 0}
+  m_LocalScale: {x: 0.25, y: 0.3, z: 10.000001}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 485488545}
@@ -1376,6 +1376,7 @@ GameObject:
   m_Component:
   - component: {fileID: 852102426}
   - component: {fileID: 852102425}
+  - component: {fileID: 852102427}
   m_Layer: 0
   m_Name: RevealPainter
   m_TagString: Untagged
@@ -1421,6 +1422,20 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &852102427
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 852102424}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 857d656af5cc947409b0b43514d08502, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LevelRevealImage
+  revealRenderer: {fileID: 2084246671}
+  textureProperty: _BaseMap
 --- !u!1 &875889195
 GameObject:
   m_ObjectHideFlags: 0
@@ -1449,8 +1464,8 @@ Transform:
   m_GameObject: {fileID: 875889195}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: -0.075, z: 9.17}
-  m_LocalScale: {x: 15.700002, y: 0.25, z: 0.3}
+  m_LocalPosition: {x: 0, y: -0.075, z: 5.3200006}
+  m_LocalScale: {x: 8.2, y: 0.25, z: 0.3}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 485488545}
@@ -1903,7 +1918,7 @@ Transform:
   m_GameObject: {fileID: 982370038}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -8.095001, y: -0.075, z: -9.095}
+  m_LocalPosition: {x: -4.345, y: -0.075, z: -5.245001}
   m_LocalScale: {x: 0.5, y: 0.25, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2015,8 +2030,8 @@ Transform:
   m_GameObject: {fileID: 1026541019}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: 0.7071068, w: 0.7071068}
-  m_LocalPosition: {x: 8.170001, y: -0.075, z: 0}
-  m_LocalScale: {x: 0.25, y: 0.3, z: 17.7}
+  m_LocalPosition: {x: 4.42, y: -0.075, z: 0}
+  m_LocalScale: {x: 0.25, y: 0.3, z: 10.000001}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 485488545}
@@ -2239,7 +2254,7 @@ Transform:
   m_GameObject: {fileID: 1104201422}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: -0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 8.095001, y: -0.075, z: -9.095}
+  m_LocalPosition: {x: 4.3450003, y: -0.075, z: -5.245001}
   m_LocalScale: {x: 0.5, y: 0.25, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2400,7 +2415,7 @@ Transform:
   m_GameObject: {fileID: 1169022409}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: -8.095001, y: -0.075, z: 9.095}
+  m_LocalPosition: {x: -4.345, y: -0.075, z: 5.245001}
   m_LocalScale: {x: 0.5182223, y: 0.25, z: 0.47908276}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3228,7 +3243,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c170948e10722644e8caf32d1dbf4e46, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProceduralLevelGenerator
-  levelNumber: 5
+  levelNumber: 10
   baseSeed: 12345
   endFallReachMultiplier: 1
   endFallPadding: 0.05
@@ -3248,12 +3263,12 @@ MonoBehaviour:
   groundTransform: {fileID: 1927028498}
   groundRenderer: {fileID: 1927028496}
   boardFrame: {fileID: 485488546}
-  startingGroundSize: {x: 16, y: 18}
-  maximumGroundSize: {x: 22, y: 24}
+  startingGroundSize: {x: 8, y: 10}
+  maximumGroundSize: {x: 12, y: 14}
   levelsPerSizeIncrease: 5
   sizeIncreasePerStep: {x: 0.5, y: 0.3}
-  minDominoesPerLine: 10
-  maxDominoesPerLine: 30
+  minDominoesPerLine: 6
+  maxDominoesPerLine: 18
   rowSpacing: 3
   targetBoardFill: 0.9
   maxLineGenerationAttempts: 1200
@@ -3263,7 +3278,7 @@ MonoBehaviour:
   allowArcLines: 0
   allowHalfCircleLines: 1
   allowCircleLines: 1
-  curvedLineChance: 0.3
+  curvedLineChance: 0.71
   minCurveRadius: 3
   maxCurveRadius: 6
   blockerChance: 0.75
@@ -3519,7 +3534,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
   m_LocalPosition: {x: 0, y: -0.2, z: 0}
-  m_LocalScale: {x: 1.6000001, y: 1, z: 1.8}
+  m_LocalScale: {x: 0.84999996, y: 1, z: 1.0300001}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 2084246669}
@@ -3823,8 +3838,8 @@ Transform:
   m_GameObject: {fileID: 2028982558}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: 1, z: -0, w: -0.00000004371139}
-  m_LocalPosition: {x: 0, y: -0.075, z: -9.17}
-  m_LocalScale: {x: 15.700002, y: 0.25, z: 0.3}
+  m_LocalPosition: {x: 0, y: -0.075, z: -5.3200006}
+  m_LocalScale: {x: 8.2, y: 0.25, z: 0.3}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 485488545}
