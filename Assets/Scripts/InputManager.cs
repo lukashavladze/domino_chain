@@ -132,7 +132,12 @@ public class InputManager : MonoBehaviour
 
             if (started)
             {
-                // Correct move.
+                HintManager hint =
+                    FindFirstObjectByType<HintManager>();
+
+                if (hint != null)
+                    hint.HideHint();
+
                 return;
             }
 
