@@ -48,6 +48,7 @@ public class Domino : MonoBehaviour
     private Vector3 fallDirection;
 
     public bool HasStarted => hasStarted;
+    public bool IsFading { get; private set; }
 
 
     private void Awake()
@@ -319,6 +320,15 @@ public class Domino : MonoBehaviour
     {
         yield return new WaitForSeconds(1.8f);
 
+        IsFading = true;
+
+        // Disable further collision sounds from this domino.
+        DominoCollisionSound collisionSound =
+            GetComponent<DominoCollisionSound>();
+
+        if (collisionSound != null)
+            collisionSound.enabled = false;
+
         Vector3 startScale = transform.localScale;
         Vector3 startPosition = transform.position;
 
@@ -387,6 +397,13 @@ public class Domino : MonoBehaviour
         hasStarted = false;
         fadeScheduled = false;
         nextActivated = false;
+        IsFading = false;
+        // Re-enable collision sounds after restart.
+        DominoCollisionSound collisionSound =
+            GetComponent<DominoCollisionSound>();
+
+        if (collisionSound != null)
+            collisionSound.enabled = true;
 
         rb.isKinematic = false;
 

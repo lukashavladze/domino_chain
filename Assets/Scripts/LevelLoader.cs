@@ -25,10 +25,10 @@ public class LevelLoader : MonoBehaviour
         Instance = this;
     }
 
-    //private void Start()
-    //{
-    //    LoadLevel(1);
-    //}
+    private void Start()
+    {
+        LoadLevel(7);
+    }
 
 
     // =========================================================
