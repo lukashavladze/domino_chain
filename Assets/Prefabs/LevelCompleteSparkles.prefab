@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 2510117573373941050}
   - component: {fileID: 5139203611605629969}
   - component: {fileID: 5595667958014574679}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: LevelCompleteSparkles
   m_TagString: Untagged
   m_Icon: {fileID: 0}
