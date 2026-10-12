@@ -1189,6 +1189,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5139203611605629969, guid: 53579062a8144b248bee3782776d8451, type: 3}
+      propertyPath: playOnAwake
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 8799897466655163674, guid: 53579062a8144b248bee3782776d8451, type: 3}
       propertyPath: m_Name
       value: LevelCompleteSparkles
