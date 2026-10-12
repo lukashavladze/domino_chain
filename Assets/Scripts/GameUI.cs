@@ -94,18 +94,31 @@ public class GameUI : MonoBehaviour
 
         levelCompletePanel.SetActive(true);
 
-        if (levelCompleteSparkles != null)
-        {
-            levelCompleteSparkles.Stop(
-                true,
-                ParticleSystemStopBehavior.StopEmittingAndClear
-            );
-
-            levelCompleteSparkles.Play();
-        }
-
         levelCompleteCoroutine =
             StartCoroutine(AnimateLevelComplete());
+
+        StartCoroutine(PlayLevelCompleteParticles());
+    }
+
+    private IEnumerator PlayLevelCompleteParticles()
+    {
+        // Wait for the popup to expand.
+        yield return new WaitForSecondsRealtime(0.15f);
+
+        if (levelCompleteSparkles == null)
+        {
+            Debug.LogError("LevelCompleteSparkles not assigned!");
+            yield break;
+        }
+
+        levelCompleteSparkles.Stop(
+            true,
+            ParticleSystemStopBehavior.StopEmittingAndClear
+        );
+
+        levelCompleteSparkles.Play(true);
+
+        Debug.Log("LEVEL COMPLETE PARTICLES TRIGGERED!");
     }
 
     public void HideLevelComplete()

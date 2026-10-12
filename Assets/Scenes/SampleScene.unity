@@ -1159,7 +1159,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2510117573373941050, guid: 53579062a8144b248bee3782776d8451, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0
+      value: 5
       objectReference: {fileID: 0}
     - target: {fileID: 2510117573373941050, guid: 53579062a8144b248bee3782776d8451, type: 3}
       propertyPath: m_LocalRotation.w
@@ -1190,12 +1190,60 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5139203611605629969, guid: 53579062a8144b248bee3782776d8451, type: 3}
+      propertyPath: looping
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5139203611605629969, guid: 53579062a8144b248bee3782776d8451, type: 3}
+      propertyPath: lengthInSec
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 5139203611605629969, guid: 53579062a8144b248bee3782776d8451, type: 3}
       propertyPath: playOnAwake
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5139203611605629969, guid: 53579062a8144b248bee3782776d8451, type: 3}
+      propertyPath: moveWithTransform
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5139203611605629969, guid: 53579062a8144b248bee3782776d8451, type: 3}
+      propertyPath: InitialModule.size3D
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5139203611605629969, guid: 53579062a8144b248bee3782776d8451, type: 3}
+      propertyPath: EmissionModule.m_BurstCount
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5139203611605629969, guid: 53579062a8144b248bee3782776d8451, type: 3}
+      propertyPath: InitialModule.startSize.scalar
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 5139203611605629969, guid: 53579062a8144b248bee3782776d8451, type: 3}
+      propertyPath: InitialModule.startSpeed.scalar
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 5139203611605629969, guid: 53579062a8144b248bee3782776d8451, type: 3}
+      propertyPath: EmissionModule.m_Bursts.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5139203611605629969, guid: 53579062a8144b248bee3782776d8451, type: 3}
+      propertyPath: EmissionModule.rateOverTime.scalar
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5139203611605629969, guid: 53579062a8144b248bee3782776d8451, type: 3}
+      propertyPath: InitialModule.startLifetime.scalar
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 5139203611605629969, guid: 53579062a8144b248bee3782776d8451, type: 3}
+      propertyPath: EmissionModule.m_Bursts.Array.data[0].countCurve.scalar
+      value: 60
       objectReference: {fileID: 0}
     - target: {fileID: 8799897466655163674, guid: 53579062a8144b248bee3782776d8451, type: 3}
       propertyPath: m_Name
       value: LevelCompleteSparkles
+      objectReference: {fileID: 0}
+    - target: {fileID: 8799897466655163674, guid: 53579062a8144b248bee3782776d8451, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -1205,6 +1253,11 @@ PrefabInstance:
 --- !u!4 &481537092 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2510117573373941050, guid: 53579062a8144b248bee3782776d8451, type: 3}
+  m_PrefabInstance: {fileID: 481537091}
+  m_PrefabAsset: {fileID: 0}
+--- !u!198 &481537094 stripped
+ParticleSystem:
+  m_CorrespondingSourceObject: {fileID: 5139203611605629969, guid: 53579062a8144b248bee3782776d8451, type: 3}
   m_PrefabInstance: {fileID: 481537091}
   m_PrefabAsset: {fileID: 0}
 --- !u!1 &485488544
@@ -3719,7 +3772,6 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 1355120256}
   - {fileID: 2011538044}
   - {fileID: 907479400}
   m_Father: {fileID: 1272595151}
@@ -3955,12 +4007,12 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1355120255}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1242036277}
+  m_Father: {fileID: 2011538044}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
@@ -5237,6 +5289,7 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
+  - {fileID: 1355120256}
   - {fileID: 1591740980}
   - {fileID: 854553759}
   m_Father: {fileID: 1242036277}
@@ -5525,7 +5578,7 @@ MonoBehaviour:
   pulseDuration: 0.15
   levelCompletePanel: {fileID: 1272595150}
   levelCompletePopup: {fileID: 1242036277}
-  levelCompleteSparkles: {fileID: 5139203611605629969, guid: 53579062a8144b248bee3782776d8451, type: 3}
+  levelCompleteSparkles: {fileID: 481537094}
   continueButton: {fileID: 1996820418}
   gameOverDuration: 0.65
   gameOverDropDistance: 450
