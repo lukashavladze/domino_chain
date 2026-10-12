@@ -14,6 +14,7 @@ public class GameUI : MonoBehaviour
 
     [Header("Game Over")]
     [SerializeField] private GameObject gameOverPanel;
+    [SerializeField] private RectTransform gameOverPopup;
 
     [Header("Level")]
     [SerializeField] private TMP_Text levelText;
@@ -30,9 +31,51 @@ public class GameUI : MonoBehaviour
 
     [SerializeField] private Button continueButton;
 
+    [Header("Game Over Animation")]
+    [SerializeField] private float gameOverDuration = 0.65f;
+    [SerializeField] private float gameOverDropDistance = 450f;
+    [SerializeField] private float gameOverStartScale = 0.85f;
+    [SerializeField] private float gameOverOvershoot = 1.08f;
+
+    private Coroutine gameOverCoroutine;
+    private RectTransform gameOverRect;
+    private CanvasGroup gameOverCanvasGroup;
+    private Vector2 gameOverOriginalPosition;
+    private Vector3 gameOverOriginalScale;
+
     // ==========================================
     // LIVES
     // ==========================================
+
+
+    private void Awake()
+    {
+        if (gameOverPanel == null || gameOverPopup == null)
+        {
+            Debug.LogError(
+                "Game Over references are not assigned!"
+            );
+            return;
+        }
+
+        // Only animate the popup.
+        gameOverRect = gameOverPopup;
+
+        gameOverCanvasGroup =
+            gameOverPopup.GetComponent<CanvasGroup>();
+
+        if (gameOverCanvasGroup == null)
+        {
+            gameOverCanvasGroup =
+                gameOverPopup.gameObject.AddComponent<CanvasGroup>();
+        }
+
+        gameOverOriginalPosition =
+            gameOverRect.anchoredPosition;
+
+        gameOverOriginalScale =
+            gameOverRect.localScale;
+    }
 
     public void SetLives(int currentLives)
     {
@@ -98,10 +141,32 @@ public class GameUI : MonoBehaviour
 
     public void HideGameOver()
     {
-        if (gameOverPanel != null)
+        if (gameOverCoroutine != null)
         {
-            gameOverPanel.SetActive(false);
+            StopCoroutine(gameOverCoroutine);
+            gameOverCoroutine = null;
         }
+
+        if (gameOverPanel == null)
+            return;
+
+        if (gameOverRect != null)
+        {
+            gameOverRect.anchoredPosition =
+                gameOverOriginalPosition;
+
+            gameOverRect.localScale =
+                gameOverOriginalScale;
+        }
+
+        if (gameOverCanvasGroup != null)
+        {
+            gameOverCanvasGroup.alpha = 1f;
+            gameOverCanvasGroup.interactable = true;
+            gameOverCanvasGroup.blocksRaycasts = true;
+        }
+
+        gameOverPanel.SetActive(false);
     }
 
 
@@ -128,11 +193,95 @@ public class GameUI : MonoBehaviour
 
     public void ShowGameOver(bool canContinue)
     {
-        if (gameOverPanel != null)
-            gameOverPanel.SetActive(true);
+        if (gameOverPanel == null)
+            return;
+
+        if (gameOverCoroutine != null)
+        {
+            StopCoroutine(gameOverCoroutine);
+            gameOverCoroutine = null;
+        }
+
+        gameOverPanel.SetActive(true);
 
         if (continueButton != null)
             continueButton.interactable = canContinue;
+
+        gameOverCoroutine =
+            StartCoroutine(AnimateGameOver());
+    }
+
+    private IEnumerator AnimateGameOver()
+    {
+        float duration = 0.35f;
+        float elapsed = 0f;
+
+        // Always appear at center.
+        gameOverRect.anchoredPosition =
+            gameOverOriginalPosition;
+
+        // Start small.
+        gameOverRect.localScale =
+            gameOverOriginalScale * 0.4f;
+
+        gameOverCanvasGroup.alpha = 0f;
+        gameOverCanvasGroup.interactable = false;
+        gameOverCanvasGroup.blocksRaycasts = false;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+
+            float t = Mathf.Clamp01(elapsed / duration);
+
+            float scale;
+
+            if (t < 0.4f)
+            {
+                // Fast expansion.
+                float p = t / 0.4f;
+
+                p = 1f - Mathf.Pow(1f - p, 3f);
+
+                scale = Mathf.Lerp(0.4f, 1.15f, p);
+            }
+            else if (t < 0.7f)
+            {
+                // Small compression.
+                float p = (t - 0.4f) / 0.3f;
+
+                p = p * p * (3f - 2f * p);
+
+                scale = Mathf.Lerp(1.15f, 0.95f, p);
+            }
+            else
+            {
+                // Final settle.
+                float p = (t - 0.7f) / 0.3f;
+
+                p = p * p * (3f - 2f * p);
+
+                scale = Mathf.Lerp(0.95f, 1f, p);
+            }
+
+            gameOverRect.localScale =
+                gameOverOriginalScale * scale;
+
+            // Fast fade.
+            gameOverCanvasGroup.alpha =
+                Mathf.Clamp01(t * 8f);
+
+            yield return null;
+        }
+
+        gameOverRect.localScale =
+            gameOverOriginalScale;
+
+        gameOverCanvasGroup.alpha = 1f;
+        gameOverCanvasGroup.interactable = true;
+        gameOverCanvasGroup.blocksRaycasts = true;
+
+        gameOverCoroutine = null;
     }
 
 
