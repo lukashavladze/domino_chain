@@ -283,6 +283,7 @@ public class GameManager : MonoBehaviour
             );
 
             gameUI.HideGameOver();
+            gameUI.HideLevelComplete();
 
             gameUI.SetLevel(
                 currentLevel
@@ -369,16 +370,26 @@ public class GameManager : MonoBehaviour
         }
 
 
-        // Let player see completed picture.
-        yield return new WaitForSeconds(
-            1.0f
-        );
+        // Let player see the completed picture.
+        yield return new WaitForSeconds(0.5f);
 
+        // Show victory popup.
+        if (gameUI != null)
+        {
+            gameUI.ShowLevelComplete();
+        }
 
-        // Important:
-        // clear this BEFORE loading next level.
         completionCoroutine = null;
+    }
 
+
+    public void OnNextLevelPressed()
+    {
+        if (!levelCompleted)
+            return;
+
+        if (gameUI != null)
+            gameUI.HideLevelComplete();
 
         StartNextLevel();
     }

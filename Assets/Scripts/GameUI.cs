@@ -24,7 +24,13 @@ public class GameUI : MonoBehaviour
     [SerializeField] private float pulseScale = 1.3f;
     [SerializeField] private float pulseDuration = 0.15f;
 
+    [Header("Level Complete")]
+    [SerializeField] private GameObject levelCompletePanel;
+    [SerializeField] private RectTransform levelCompletePopup;
 
+    private Coroutine levelCompleteCoroutine;
+
+    [SerializeField] private ParticleSystem levelCompleteSparkles;
 
 
     private Coroutine feedbackCoroutine;
@@ -75,6 +81,89 @@ public class GameUI : MonoBehaviour
 
         gameOverOriginalScale =
             gameOverRect.localScale;
+    }
+
+    public void ShowLevelComplete()
+    {
+        if (levelCompletePanel == null ||
+            levelCompletePopup == null)
+            return;
+
+        if (levelCompleteCoroutine != null)
+            StopCoroutine(levelCompleteCoroutine);
+
+        levelCompletePanel.SetActive(true);
+
+        if (levelCompleteSparkles != null)
+        {
+            levelCompleteSparkles.Stop(
+                true,
+                ParticleSystemStopBehavior.StopEmittingAndClear
+            );
+
+            levelCompleteSparkles.Play();
+        }
+
+        levelCompleteCoroutine =
+            StartCoroutine(AnimateLevelComplete());
+    }
+
+    public void HideLevelComplete()
+    {
+        if (levelCompleteCoroutine != null)
+        {
+            StopCoroutine(levelCompleteCoroutine);
+            levelCompleteCoroutine = null;
+        }
+
+        if (levelCompletePopup != null)
+            levelCompletePopup.localScale = Vector3.one;
+
+        if (levelCompletePanel != null)
+            levelCompletePanel.SetActive(false);
+    }
+
+    private IEnumerator AnimateLevelComplete()
+    {
+        float duration = 0.32f;
+        float elapsed = 0f;
+
+        Vector3 originalScale = Vector3.one;
+
+        levelCompletePopup.localScale =
+            originalScale * 0.4f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+
+            float t = Mathf.Clamp01(elapsed / duration);
+
+            float scale;
+
+            if (t < 0.5f)
+            {
+                float p = t / 0.5f;
+                p = 1f - Mathf.Pow(1f - p, 3f);
+
+                scale = Mathf.Lerp(0.4f, 1.12f, p);
+            }
+            else
+            {
+                float p = (t - 0.5f) / 0.5f;
+                p = p * p * (3f - 2f * p);
+
+                scale = Mathf.Lerp(1.12f, 1f, p);
+            }
+
+            levelCompletePopup.localScale =
+                originalScale * scale;
+
+            yield return null;
+        }
+
+        levelCompletePopup.localScale = originalScale;
+        levelCompleteCoroutine = null;
     }
 
     public void SetLives(int currentLives)
