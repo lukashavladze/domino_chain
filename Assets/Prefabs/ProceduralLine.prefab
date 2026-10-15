@@ -44,7 +44,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 27976af1c63f6b343b75652657e58382, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DominoLine
-  firstDomino: {fileID: 1866767734236672870, guid: 32e2d0e1d0722e643a1a66f9719ccde8, type: 3}
+  firstDomino: {fileID: -7882514456676177486, guid: 6e72724952eca2542af22896daf36128, type: 3}
   dominoes: []
   fallReachMultiplier: 1
   fallCheckPadding: 0.05

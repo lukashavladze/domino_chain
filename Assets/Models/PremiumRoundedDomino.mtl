@@ -1,0 +1,24 @@
+newmtl Emerald_Front
+Kd 0.015 0.23 0.17
+Ks 0.6 0.7 0.5
+Ns 240
+
+newmtl Emerald_Back
+Kd 0.012 0.10 0.075
+Ks 0.3 0.3 0.3
+Ns 160
+
+newmtl Emerald_Sides
+Kd 0.009 0.13 0.095
+Ks 0.6 0.6 0.6
+Ns 240
+
+newmtl Emerald_Bevel
+Kd 0.025 0.19 0.14
+Ks 0.65 0.65 0.65
+Ns 240
+
+newmtl Metallic_Gold_Trim
+Kd 0.75 0.48 0.12
+Ks 0.9 0.8 0.45
+Ns 400
