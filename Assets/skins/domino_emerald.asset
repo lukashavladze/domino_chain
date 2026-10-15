@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fc23de684026a94f9f1966f2670c7da, type: 3}
+  m_Name: domino_emerald
+  m_EditorClassIdentifier: Assembly-CSharp::DominoSkin
+  skinId: domino_emerald
+  displayName: Emerald
+  shopIcon: {fileID: 0}
+  normalMaterials:
+  - {fileID: 2100000, guid: fce808fc2cd1fa14f894f44fbae77b8f, type: 2}
+  - {fileID: 2100000, guid: fce808fc2cd1fa14f894f44fbae77b8f, type: 2}
+  - {fileID: 2100000, guid: f05f969709a6636499849de1bfed4606, type: 2}
+  - {fileID: 2100000, guid: f05f969709a6636499849de1bfed4606, type: 2}
+  - {fileID: 2100000, guid: f05f969709a6636499849de1bfed4606, type: 2}
+  firstDominoMaterials:
+  - {fileID: 2100000, guid: 88fb2553068624d48975485b90cba0da, type: 2}
+  - {fileID: 2100000, guid: 88fb2553068624d48975485b90cba0da, type: 2}
+  - {fileID: 2100000, guid: 88fb2553068624d48975485b90cba0da, type: 2}
+  - {fileID: 2100000, guid: 88fb2553068624d48975485b90cba0da, type: 2}
+  - {fileID: 2100000, guid: 88fb2553068624d48975485b90cba0da, type: 2}

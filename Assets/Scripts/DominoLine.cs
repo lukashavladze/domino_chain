@@ -41,13 +41,6 @@ public class DominoLine : MonoBehaviour
 
     private float nextAvailabilityCheck;
 
-
-    [Header("Visual")]
-    [SerializeField] private Renderer dominoRenderer;
-
-    [SerializeField] private Material normalMaterial;
-    [SerializeField] private Material firstDominoMaterial;
-
     public void AutoConnect()
     {
         dominoes.Clear();
@@ -84,21 +77,6 @@ public class DominoLine : MonoBehaviour
             Renderer renderer =
                 domino.GetComponentInChildren<Renderer>();
 
-            if (renderer != null)
-            {
-                if (i == 0)
-                {
-                    // First/start domino.
-                    renderer.sharedMaterial =
-                        firstDominoMaterial;
-                }
-                else
-                {
-                    // All normal dominoes.
-                    renderer.sharedMaterial =
-                        normalMaterial;
-                }
-            }
 
             // ==========================================
             // CONNECTIONS
@@ -147,20 +125,6 @@ public class DominoLine : MonoBehaviour
 
         if (!blockedByLines.Contains(line))
             blockedByLines.Add(line);
-    }
-
-    public void SetFirstDominoVisual(bool isFirst)
-    {
-        if (dominoRenderer == null)
-            dominoRenderer = GetComponentInChildren<Renderer>();
-
-        if (dominoRenderer == null)
-            return;
-
-        dominoRenderer.sharedMaterial =
-            isFirst
-                ? firstDominoMaterial
-                : normalMaterial;
     }
 
     private void Update()

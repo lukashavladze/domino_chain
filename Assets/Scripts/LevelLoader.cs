@@ -27,7 +27,7 @@ public class LevelLoader : MonoBehaviour
 
     private void Start()
     {
-        LoadLevel(33);
+        LoadLevel(2);
     }
 
 
@@ -150,6 +150,23 @@ public class LevelLoader : MonoBehaviour
                 line.AutoConnect();
                 //line.RefreshAvailability();
             }
+        }
+
+        // =====================================
+        // APPLY PLAYER'S EQUIPPED DOMINO SKIN
+        // =====================================
+
+        if (DominoSkinManager.Instance != null)
+        {
+            DominoSkinManager.Instance.ApplyToLevel(
+                currentLevelObject
+            );
+        }
+        else
+        {
+            Debug.LogWarning(
+                "DominoSkinManager not found. Using prefab materials."
+            );
         }
 
 
