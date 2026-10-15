@@ -54,81 +54,57 @@ public class InputManager : MonoBehaviour
     }
 
 
+
     private void TryHit(Vector2 screenPosition)
     {
-        Ray ray =
-            cam.ScreenPointToRay(
-                screenPosition
-            );
+        Ray ray = cam.ScreenPointToRay(screenPosition);
 
+        RaycastHit[] hits = Physics.RaycastAll(ray);
 
-        RaycastHit[] hits =
-            Physics.RaycastAll(ray);
+        Array.Sort(hits, (a, b) =>
+            a.distance.CompareTo(b.distance));
 
-
-        if (hits == null ||
-            hits.Length == 0)
-        {
-            return;
-        }
-
-
-        // RaycastAll does not guarantee distance order.
-        Array.Sort(
-            hits,
-            (a, b) =>
-                a.distance.CompareTo(
-                    b.distance
-                )
-        );
-
+        Debug.Log($"RAYCAST HITS: {hits.Length}");
 
         foreach (RaycastHit hit in hits)
         {
             Domino domino =
-                hit.collider
-                    .GetComponentInParent<Domino>();
-
+                hit.collider.GetComponentInParent<Domino>();
 
             if (domino == null)
                 continue;
 
+            DominoLine line = domino.ownerLine;
 
-            // Ignore dominoes that already started.
+            Debug.Log(
+                $"HIT: {domino.name} | " +
+                $"HasStarted: {domino.HasStarted} | " +
+                $"Standing: {domino.IsStanding()} | " +
+                $"OwnerLine: {(line != null ? line.name : "NULL")} | " +
+                $"IsFirst: {(line != null && domino == line.firstDomino)} | " +
+                $"CanStartChain: {domino.canStartChain}"
+            );
+
             if (domino.HasStarted)
                 continue;
 
-
-            // Ignore dominoes that are no longer standing.
             if (!domino.IsStanding())
                 continue;
-
-
-            DominoLine line =
-                domino.ownerLine;
-
 
             if (line == null)
                 continue;
 
-
-            // ==========================================
-            // ONLY STARTER DOMINOES ARE GAMEPLAY INPUT
-            // ==========================================
-
             if (domino != line.firstDomino)
             {
+                Debug.Log("IGNORED: Not first domino");
                 return;
             }
 
+            Debug.Log("ATTEMPTING TO START LINE");
 
-            // ==========================================
-            // ATTEMPT TO START THIS LINE
-            // ==========================================
+            bool started = line.TryStartLine();
 
-            bool started =
-                line.TryStartLine();
-
+            Debug.Log("START RESULT: " + started);
 
             if (started)
             {
@@ -141,23 +117,19 @@ public class InputManager : MonoBehaviour
                 return;
             }
 
-
-            // ==========================================
-            // WRONG MOVE
-            // ==========================================
-            //
-            // Player clicked a valid starter domino,
-            // but the line is currently blocked.
-            //
+            Debug.Log("WRONG MOVE - REGISTERING LIFE LOSS");
 
             if (GameManager.Instance != null)
             {
-                GameManager.Instance
-                    .RegisterWrongMove();
+                GameManager.Instance.RegisterWrongMove();
             }
-
+            else
+            {
+                Debug.LogError("GameManager.Instance is NULL");
+            }
 
             return;
         }
     }
+
 }
