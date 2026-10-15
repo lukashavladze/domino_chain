@@ -51,8 +51,8 @@ MonoBehaviour:
   blockerMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  fallSweepSamples: 8
-  fallSweepPadding: 0.015
+  fallSweepSamples: 10
+  fallSweepPadding: 0.017
   useGeneratedBlocking: 0
   blockedByLines: []
   dominoRenderer: {fileID: 0}

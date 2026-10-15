@@ -318,7 +318,8 @@ public class Domino : MonoBehaviour
 
     private IEnumerator FadeOut()
     {
-        yield return new WaitForSeconds(1.8f);
+        // 1.8 iko 
+        yield return new WaitForSeconds(2.5f);
 
         IsFading = true;
 

@@ -9,7 +9,8 @@ public class DominoSplineBuilder : MonoBehaviour
     public Domino dominoPrefab;
 
     public Vector3 rotationOffset = new Vector3(0, 90, 0);
-
+    
+    // spacing iko 0.25
     public float spacing = 0.25f;
     public float groundOffset = 0.5f;
 
