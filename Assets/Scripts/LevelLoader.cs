@@ -27,7 +27,7 @@ public class LevelLoader : MonoBehaviour
 
     private void Start()
     {
-        LoadLevel(32);
+        LoadLevel(33);
     }
 
 

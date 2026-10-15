@@ -114,6 +114,12 @@ public class ProceduralLevelGenerator : MonoBehaviour
     [Min(0.01f)]
     public float cellSize = 0.25f;
 
+    [Header("Domino Spacing")]
+    [Tooltip("Target distance between domino centers. Independent of board cell size.")]
+    [Min(0.05f)]
+    [SerializeField]
+    private float dominoSpacing = 0.30f;
+
     [Header("Reveal Coverage")]
 
     [Tooltip("Extra reveal size beyond one grid cell.")]
@@ -1368,11 +1374,11 @@ public class ProceduralLevelGenerator : MonoBehaviour
         //
         // Solve for angleStep using desired chord = cellSize.
         float ratio =
-            Mathf.Clamp(
-                cellSize / (2f * radius),
-                0f,
-                0.9999f
-            );
+     Mathf.Clamp(
+         dominoSpacing / (2f * radius),
+         0f,
+         0.9999f
+     );
 
         float angleStepRadians =
             2f * Mathf.Asin(ratio);
@@ -1667,136 +1673,89 @@ public class ProceduralLevelGenerator : MonoBehaviour
     // CREATE PROCEDURAL LINE
     // =========================================================
 
+
     private DominoLine CreateProceduralLine(
         List<Vector2Int> path,
         int lineIndex)
     {
-        if (path == null ||
-            path.Count < 2)
+        if (path == null || path.Count < 2)
+            return null;
+
+        // Keep original grid reservation unchanged.
+        foreach (Vector2Int cell in path)
         {
+            if (board.IsOccupied(cell))
+                return null;
+        }
+
+        DominoLine line = Instantiate(
+            linePrefab,
+            generatedRoot);
+
+        line.name = $"Generated_Line_{lineIndex:000}";
+        line.useGeneratedBlocking = true;
+        line.blockedByLines.Clear();
+
+        foreach (Vector2Int cell in path)
+            board.Occupy(cell);
+
+        Vector3 start = board.CellToWorld(path[0]);
+        Vector3 end = board.CellToWorld(path[path.Count - 1]);
+
+        Vector3 direction = end - start;
+        direction.y = 0f;
+
+        float length = direction.magnitude;
+
+        if (length < 0.001f)
+        {
+            Destroy(line.gameObject);
             return null;
         }
 
+        direction.Normalize();
 
-        DominoLine line =
-            Instantiate(
-                linePrefab,
-                generatedRoot
-            );
+        // Use the same endpoints, but control the
+        // number of dominoes independently.
+        int intervals = Mathf.Max(
+            1,
+            Mathf.RoundToInt(length / dominoSpacing));
 
+        int dominoCount = intervals + 1;
 
-        line.name =
-            $"Generated_Line_{lineIndex:000}";
+        Quaternion rotation =
+            Quaternion.LookRotation(direction, Vector3.up) *
+            Quaternion.Euler(rotationOffset);
 
-
-        // -----------------------------------------------------
-        // IMPORTANT
-        // Procedural levels use generated dependencies.
-        // -----------------------------------------------------
-
-        line.useGeneratedBlocking = true;
-
-        line.blockedByLines.Clear();
-
-
-        // -----------------------------------------------------
-        // CREATE DOMINOES
-        // -----------------------------------------------------
-
-        for (
-            int i = 0;
-            i < path.Count;
-            i++)
+        for (int i = 0; i < dominoCount; i++)
         {
-            Vector2Int cell =
-                path[i];
+            float t = i / (float)intervals;
 
+            Vector3 position = Vector3.Lerp(
+                start, end, t);
 
-            if (board.IsOccupied(cell))
-            {
-                Debug.LogError(
-                    $"Cell {cell} was already occupied."
-                );
+            position.y += groundOffset;
 
-                continue;
-            }
+            Domino domino = Instantiate(
+                dominoPrefab,
+                line.transform);
 
-
-            board.Occupy(cell);
-
-
-            Vector3 worldPosition =
-                board.CellToWorld(cell);
-
-
-            worldPosition.y +=
-                groundOffset;
-
-
-            Domino domino =
-                Instantiate(
-                    dominoPrefab,
-                    line.transform
-                );
+            domino.name = $"Domino_{i:000}";
+            domino.transform.position = position;
+            domino.transform.rotation = rotation;
 
             domino.SetRevealSize(
-    cellSize + revealOverlap
-);
-
-
-            domino.name =
-                $"Domino_{i:000}";
-
-
-            domino.transform.position =
-                worldPosition;
-
-
-            // -------------------------------------------------
-            // ROTATION
-            // -------------------------------------------------
-
-            Vector3 direction =
-                GetPathDirection(
-                    path,
-                    i
-                );
-
-
-            if (direction.sqrMagnitude >
-                0.001f)
-            {
-                Quaternion rotation =
-                    Quaternion.LookRotation(
-                        direction,
-                        Vector3.up
-                    );
-
-
-                rotation *=
-                    Quaternion.Euler(
-                        rotationOffset
-                    );
-
-
-                domino.transform.rotation =
-                    rotation;
-            }
-
+                cellSize + revealOverlap);
 
             generatedDominoCount++;
         }
 
-
-        // Connect domino 0 -> 1 -> 2 -> ...
         line.AutoConnect();
-
-
         generatedLineCount++;
-
 
         return line;
     }
+
 
     private DominoLine CreateCurvedProceduralLine(
     CurvedPath path,

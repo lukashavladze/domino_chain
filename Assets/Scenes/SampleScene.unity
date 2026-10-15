@@ -4630,6 +4630,7 @@ MonoBehaviour:
   validator: {fileID: 1652989082}
   maxGenerationAttempts: 100
   cellSize: 0.25
+  dominoSpacing: 0.3
   revealOverlap: 0.7
   groundOffset: 0.3
   boardEdgeMargin: 0.25
