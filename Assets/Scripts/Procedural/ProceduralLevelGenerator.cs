@@ -1400,21 +1400,20 @@ public class ProceduralLevelGenerator : MonoBehaviour
         else
         {
             // Arc / half-circle includes BOTH ends.
-            int intervals =
+            int intervals = Mathf.Max(
+                1,
                 Mathf.RoundToInt(
-                    totalAngleRadians /
-                    angleStepRadians
-                );
-
-            intervals = Mathf.Max(1, intervals);
+                    totalAngleRadians / angleStepRadians
+                )
+            );
 
             dominoCount = intervals + 1;
 
-            dominoCount =
-                Mathf.Max(
-                    minDominoesPerLine,
-                    dominoCount
-                );
+            // Reject curves that cannot fit the minimum
+            // number of dominoes at the intended spacing.
+            // Do not squeeze extra dominoes into the curve.
+            if (dominoCount < minDominoesPerLine)
+                return null;
         }
 
         if (dominoCount < 2)

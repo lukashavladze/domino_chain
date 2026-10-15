@@ -16,13 +16,13 @@ public class Domino : MonoBehaviour
     public List<Domino> nextDominoes = new();
 
     [Header("Fall Physics")]
-    [SerializeField] private float gravityMultiplier = 2.0f;
+    [SerializeField] private float gravityMultiplier = 4f;
 
     [Header("Gameplay")]
     public bool canStartChain;
 
     [Header("Settings")]
-    public float pushForce = 2.0f;
+    public float pushForce = 4.0f;
     [Header("Physics Chain")]
     [Tooltip("How close the falling domino must be before the next domino becomes dynamic.")]
     [SerializeField] private float activationDistance = 0.22f;
