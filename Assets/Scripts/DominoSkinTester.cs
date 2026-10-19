@@ -14,6 +14,6 @@ public class DominoSkinTester : MonoBehaviour
     public void EquipEmerald()
     {
         DominoSkinManager.Instance?.EquipSkin(
-            "domino_emerald");
+            "domino_emerald_1");
     }
 }

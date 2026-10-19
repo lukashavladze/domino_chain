@@ -7,7 +7,7 @@ using UnityEngine;
 public class DominoSkin : ScriptableObject
 {
     public string skinId = "domino_default";
-    public string displayName = "Default";
+    public string displayName = "domino_emerald_1";
     public Sprite shopIcon;
 
     [Header("Materials")]
