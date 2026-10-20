@@ -5014,7 +5014,7 @@ MonoBehaviour:
   fallSweepSamples: 12
   fallSweepPadding: 0.08
   minimumDominoClearance: 0.55
-  dominoPrefab: {fileID: -7882514456676177486, guid: dd70e4eff92ff6f468febabff7bc3467, type: 3}
+  dominoPrefab: {fileID: -7882514456676177486, guid: 375ca54c2bfe139409ddba6b3c1a2dd7, type: 3}
   linePrefab: {fileID: 1129866902755867453, guid: 2348eabf4196cbd4880856edd5fcad23, type: 3}
   blockingCalculator: {fileID: 1652989083}
   validator: {fileID: 1652989082}
