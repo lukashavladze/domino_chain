@@ -1,245 +1,283 @@
+
+using System.Collections.Generic;
 using UnityEngine;
 
+[ExecuteAlways]
 public class BoardFrame : MonoBehaviour
 {
     [Header("Ground")]
     [SerializeField] private Renderer groundRenderer;
 
+    [Header("Generated Frame")]
+    [SerializeField] private MeshFilter frameMeshFilter;
+    [SerializeField] private MeshRenderer frameMeshRenderer;
 
-    [Header("Edges")]
-    [SerializeField] private Transform top;
-    [SerializeField] private Transform bottom;
-    [SerializeField] private Transform left;
-    [SerializeField] private Transform right;
+    [Header("Materials")]
+    [SerializeField] private Material innerGold;
+    [SerializeField] private Material emeraldMarble;
+    [SerializeField] private Material outerGold;
 
-
-    [Header("Corners")]
-    [SerializeField] private Transform cornerTL;
-    [SerializeField] private Transform cornerTR;
-    [SerializeField] private Transform cornerBL;
-    [SerializeField] private Transform cornerBR;
-
-
-    [Header("Edge Settings")]
+    [Header("Dimensions")]
+    [Min(0.01f)]
     [SerializeField] private float frameWidth = 0.33f;
-    [SerializeField] private float frameHeight = 0.25f;
+
+    [Min(0.001f)]
+    [SerializeField] private float frameHeight = 0.12f;
+
+    [Min(0f)]
     [SerializeField] private float gap = 0.02f;
-    [SerializeField] private float edgeExtension = 0.12f;
 
+    [Header("Border Proportions")]
+    [Range(0.01f, 0.4f)]
+    [SerializeField] private float innerGoldRatio = 0.10f;
 
-    [Header("Corner Settings")]
-    [SerializeField] private float cornerSize = 0.45f;
-    [SerializeField] private float cornerHeight = 0.25f;
-    [SerializeField] private float cornerInset = 0.10f;
+    [Range(0.01f, 0.4f)]
+    [SerializeField] private float outerGoldRatio = 0.10f;
 
+    [Header("Height")]
+    [SerializeField] private float topHeightOffset = 0f;
+
+    private Mesh generatedMesh;
 
     public void Resize()
     {
-        if (groundRenderer == null)
+        if (groundRenderer == null ||
+            frameMeshFilter == null ||
+            frameMeshRenderer == null)
         {
             Debug.LogWarning(
-                "BoardFrame: Ground Renderer is not assigned."
-            );
-
+                "BoardFrame: Assign Ground and LuxuryFrame components.");
             return;
         }
 
+        // Convert world-space ground bounds into
+        // this BoardFrame object's local coordinates.
+        Bounds worldBounds = groundRenderer.bounds;
 
-        Bounds bounds =
-            groundRenderer.bounds;
+        Vector3 localMin =
+            transform.InverseTransformPoint(worldBounds.min);
 
+        Vector3 localMax =
+            transform.InverseTransformPoint(worldBounds.max);
 
-        float groundWidth =
-            bounds.size.x;
+        float minX = Mathf.Min(localMin.x, localMax.x);
+        float maxX = Mathf.Max(localMin.x, localMax.x);
+        float minZ = Mathf.Min(localMin.z, localMax.z);
+        float maxZ = Mathf.Max(localMin.z, localMax.z);
 
-        float groundDepth =
-            bounds.size.z;
+        float groundTop =
+            Mathf.Max(localMin.y, localMax.y);
 
+        float innerOffset = gap;
+        float innerWidth = frameWidth * innerGoldRatio;
+        float outerWidth = frameWidth * outerGoldRatio;
+        float marbleWidth =
+            frameWidth - innerWidth - outerWidth;
 
-        Vector3 center =
-            bounds.center;
-
-
-        // ==========================================
-        // HEIGHTS
-        // ==========================================
-
-        float edgeY =
-            bounds.max.y +
-            frameHeight * 0.5f;
-
-
-        float cornerY =
-            bounds.max.y +
-            cornerHeight * 0.5f;
-
-
-        // ==========================================
-        // FRAME OFFSET
-        // ==========================================
-
-        float edgeOffset =
-            frameWidth * 0.5f +
-            gap;
-
-
-        // ==========================================
-        // TOP
-        // ==========================================
-
-        if (top != null)
+        if (marbleWidth <= 0f)
         {
-            top.position =
-                new Vector3(
-                    center.x,
-                    edgeY,
-                    bounds.max.z + edgeOffset
-                );
-
-            top.rotation = Quaternion.Euler(0f, 0f, 0f);
-
-
-            top.localScale =
-     new Vector3(
-         groundWidth - cornerSize + edgeExtension,
-         frameHeight,
-         frameWidth
-     );
+            Debug.LogWarning("Invalid border proportions.");
+            return;
         }
 
+        float yBottom = groundTop + topHeightOffset;
+        float yTop = yBottom + frameHeight;
 
-        // ==========================================
-        // BOTTOM
-        // ==========================================
+        var vertices = new List<Vector3>();
+        var uv = new List<Vector2>();
 
-        if (bottom != null)
+        var triangles = new List<int>[]
         {
-            bottom.position =
-                new Vector3(
-                    center.x,
-                    edgeY,
-                    bounds.min.z - edgeOffset
-                );
+            new List<int>(),
+            new List<int>(),
+            new List<int>()
+        };
 
-            bottom.rotation = Quaternion.Euler(0f, 180f, 0f);
+        float startX = minX - innerOffset;
+        float endX = maxX + innerOffset;
+        float startZ = minZ - innerOffset;
+        float endZ = maxZ + innerOffset;
 
-            bottom.localScale =
-    new Vector3(
-        groundWidth - cornerSize + edgeExtension,
-        frameHeight,
-        frameWidth
-    );
+        // Inner gold ring.
+        AddRing(
+            vertices, uv, triangles[0],
+            startX, endX, startZ, endZ,
+            innerWidth, yBottom, yTop + 0.012f);
+
+        // Emerald marble ring.
+        float marbleInset = innerWidth;
+
+        AddRing(
+            vertices, uv, triangles[1],
+            startX - marbleInset,
+            endX + marbleInset,
+            startZ - marbleInset,
+            endZ + marbleInset,
+            marbleWidth, yBottom, yTop);
+
+        // Outer gold ring.
+        float outerInset = innerWidth + marbleWidth;
+
+        AddRing(
+            vertices, uv, triangles[2],
+            startX - outerInset,
+            endX + outerInset,
+            startZ - outerInset,
+            endZ + outerInset,
+            outerWidth, yBottom, yTop + 0.018f);
+
+        Mesh mesh = new Mesh();
+        mesh.name = "Luxury Board Frame";
+
+        if (vertices.Count > 65535)
+            mesh.indexFormat =
+                UnityEngine.Rendering.IndexFormat.UInt32;
+
+        mesh.SetVertices(vertices);
+        mesh.SetUVs(0, uv);
+        mesh.subMeshCount = 3;
+
+        for (int i = 0; i < 3; i++)
+            mesh.SetTriangles(triangles[i], i);
+
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+
+        if (generatedMesh != null)
+        {
+            if (Application.isPlaying)
+                Destroy(generatedMesh);
+            else
+                DestroyImmediate(generatedMesh);
         }
 
+        generatedMesh = mesh;
+        frameMeshFilter.sharedMesh = generatedMesh;
 
-        // ==========================================
-        // LEFT
-        // ==========================================
-
-        if (left != null)
+        frameMeshRenderer.sharedMaterials = new Material[]
         {
-            left.position =
-                new Vector3(
-                    bounds.min.x - edgeOffset,
-                    edgeY,
-                    center.z
-                );
-            left.rotation = Quaternion.Euler(0f, 0f, 90f);
+            innerGold,
+            emeraldMarble,
+            outerGold
+        };
+    }
 
+    private void AddRing(
+        List<Vector3> vertices,
+        List<Vector2> uv,
+        List<int> triangles,
+        float minX,
+        float maxX,
+        float minZ,
+        float maxZ,
+        float width,
+        float bottomY,
+        float topY)
+    {
+        float outerMinX = minX - width;
+        float outerMaxX = maxX + width;
+        float outerMinZ = minZ - width;
+        float outerMaxZ = maxZ + width;
 
-            left.localScale =
-     new Vector3(
-         frameHeight,
-         frameWidth,
-         groundDepth - cornerSize + edgeExtension
+        Vector3[] inner =
+        {
+            new Vector3(minX, topY, minZ),
+            new Vector3(maxX, topY, minZ),
+            new Vector3(maxX, topY, maxZ),
+            new Vector3(minX, topY, maxZ)
+        };
 
+        Vector3[] outer =
+        {
+            new Vector3(outerMinX, topY, outerMinZ),
+            new Vector3(outerMaxX, topY, outerMinZ),
+            new Vector3(outerMaxX, topY, outerMaxZ),
+            new Vector3(outerMinX, topY, outerMaxZ)
+        };
 
-     );
+        // Top surface, four connected mitered strips.
+        // Top surface - normals facing UP.
+        for (int i = 0; i < 4; i++)
+        {
+            int next = (i + 1) % 4;
+
+            AddQuad(
+                vertices, uv, triangles,
+                outer[i], outer[next],
+                inner[next], inner[i]);
         }
 
-
-        // ==========================================
-        // RIGHT
-        // ==========================================
-
-        if (right != null)
+        // Outer vertical walls.
+        for (int i = 0; i < 4; i++)
         {
-            right.position =
-                new Vector3(
-                    bounds.max.x + edgeOffset,
-                    edgeY,
-                    center.z
-                );
-            right.rotation = Quaternion.Euler(0f, 0f, 90f);
+            int next = (i + 1) % 4;
 
-            right.localScale =
-    new Vector3(
-        frameHeight,
-        frameWidth,
-        groundDepth - cornerSize + edgeExtension
-    );
+            Vector3 a = outer[i];
+            Vector3 b = outer[next];
+
+            Vector3 c = new Vector3(
+                b.x, bottomY, b.z);
+
+            Vector3 d = new Vector3(
+                a.x, bottomY, a.z);
+
+            AddQuad(
+                vertices, uv, triangles,
+                a, b, c, d);
         }
 
-
-        // ==========================================
-        // CORNERS
-        // ==========================================
-
-        float cornerOffset =
-            cornerSize * 0.5f +
-            gap - cornerInset;
-
-
-        // TOP LEFT
-        if (cornerTL != null)
+        // Inner vertical walls.
+        for (int i = 0; i < 4; i++)
         {
-            cornerTL.position =
-                new Vector3(
-                    bounds.min.x - cornerOffset,
-                    cornerY,
-                    bounds.max.z + cornerOffset
-                );
-        }
+            int next = (i + 1) % 4;
 
+            Vector3 a = inner[next];
+            Vector3 b = inner[i];
 
-        // TOP RIGHT
-        if (cornerTR != null)
-        {
-            cornerTR.position =
-                new Vector3(
-                    bounds.max.x + cornerOffset,
-                    cornerY,
-                    bounds.max.z + cornerOffset
-                );
-        }
+            Vector3 c = new Vector3(
+                b.x, bottomY, b.z);
 
+            Vector3 d = new Vector3(
+                a.x, bottomY, a.z);
 
-        // BOTTOM LEFT
-        if (cornerBL != null)
-        {
-            cornerBL.position =
-                new Vector3(
-                    bounds.min.x - cornerOffset,
-                    cornerY,
-                    bounds.min.z - cornerOffset
-                );
-        }
-
-
-        // BOTTOM RIGHT
-        if (cornerBR != null)
-        {
-            cornerBR.position =
-                new Vector3(
-                    bounds.max.x + cornerOffset,
-                    cornerY,
-                    bounds.min.z - cornerOffset
-                );
+            AddQuad(
+                vertices, uv, triangles,
+                a, b, c, d);
         }
     }
 
+    private void AddQuad(
+        List<Vector3> vertices,
+        List<Vector2> uv,
+        List<int> triangles,
+        Vector3 a,
+        Vector3 b,
+        Vector3 c,
+        Vector3 d)
+    {
+        int start = vertices.Count;
 
-    // Lets you test resizing from the Inspector.
+        vertices.Add(a);
+        vertices.Add(b);
+        vertices.Add(c);
+        vertices.Add(d);
+
+        // World-sized UV coordinates for consistent
+        // marble texture scale.
+        uv.Add(new Vector2(a.x, a.z));
+        uv.Add(new Vector2(b.x, b.z));
+        uv.Add(new Vector2(c.x, c.z));
+        uv.Add(new Vector2(d.x, d.z));
+
+        triangles.Add(start);
+        triangles.Add(start + 2);
+        triangles.Add(start + 1);
+
+        triangles.Add(start);
+        triangles.Add(start + 3);
+        triangles.Add(start + 2);
+    }
+
     [ContextMenu("Resize Board Frame")]
     private void ResizeFromInspector()
     {

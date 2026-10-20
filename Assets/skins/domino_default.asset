@@ -16,14 +16,10 @@ MonoBehaviour:
   displayName: Default
   shopIcon: {fileID: 0}
   normalMaterials:
-  - {fileID: 2100000, guid: 5dc0156e8632f174cb4b8591dd03cb88, type: 2}
-  - {fileID: 2100000, guid: 5dc0156e8632f174cb4b8591dd03cb88, type: 2}
-  - {fileID: 2100000, guid: c58de09658276844781065ddaf33f20e, type: 2}
-  - {fileID: 2100000, guid: c58de09658276844781065ddaf33f20e, type: 2}
-  - {fileID: 2100000, guid: c58de09658276844781065ddaf33f20e, type: 2}
+  - {fileID: 2100000, guid: 2e7e541219e8e194ea49e866066eaa13, type: 2}
+  - {fileID: 2100000, guid: 2e7e541219e8e194ea49e866066eaa13, type: 2}
+  - {fileID: 2100000, guid: 6fb05c3cd0c5c9846a5c18e509a4e375, type: 2}
   firstDominoMaterials:
-  - {fileID: -8419747873039559036, guid: 8556df2335b459b469019c1869e62cac, type: 3}
-  - {fileID: -8419747873039559036, guid: 8556df2335b459b469019c1869e62cac, type: 3}
-  - {fileID: 2100000, guid: fce808fc2cd1fa14f894f44fbae77b8f, type: 2}
-  - {fileID: 2100000, guid: fce808fc2cd1fa14f894f44fbae77b8f, type: 2}
-  - {fileID: 2100000, guid: fce808fc2cd1fa14f894f44fbae77b8f, type: 2}
+  - {fileID: 2100000, guid: c58de09658276844781065ddaf33f20e, type: 2}
+  - {fileID: 2100000, guid: c58de09658276844781065ddaf33f20e, type: 2}
+  - {fileID: 2100000, guid: c58de09658276844781065ddaf33f20e, type: 2}

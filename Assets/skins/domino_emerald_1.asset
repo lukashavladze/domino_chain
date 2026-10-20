@@ -16,14 +16,10 @@ MonoBehaviour:
   displayName: Emerald
   shopIcon: {fileID: 0}
   normalMaterials:
-  - {fileID: 2100000, guid: 4a4465bf6c7821c4583ad4a42587b5ee, type: 2}
-  - {fileID: 2100000, guid: ac6148aa3321897428a481c93b89443f, type: 2}
-  - {fileID: 2100000, guid: 0fefd6d03739a9444bb375da2d5dc0b1, type: 2}
-  - {fileID: 2100000, guid: 12e46f561763dd844899ced343a351fd, type: 2}
-  - {fileID: 2100000, guid: fce808fc2cd1fa14f894f44fbae77b8f, type: 2}
+  - {fileID: 2100000, guid: 51c42860a9c9b23449d0aeda47a57670, type: 2}
+  - {fileID: 2100000, guid: 51c42860a9c9b23449d0aeda47a57670, type: 2}
+  - {fileID: 2100000, guid: 1c6955d3a89730a4fbf0d76f6dbd4ce2, type: 2}
   firstDominoMaterials:
-  - {fileID: 2100000, guid: 88fb2553068624d48975485b90cba0da, type: 2}
-  - {fileID: 2100000, guid: 88fb2553068624d48975485b90cba0da, type: 2}
-  - {fileID: 2100000, guid: 88fb2553068624d48975485b90cba0da, type: 2}
-  - {fileID: 2100000, guid: 88fb2553068624d48975485b90cba0da, type: 2}
-  - {fileID: 2100000, guid: 88fb2553068624d48975485b90cba0da, type: 2}
+  - {fileID: 2100000, guid: ff09005ee15d3a64db7d29f624d53b24, type: 2}
+  - {fileID: 2100000, guid: ff09005ee15d3a64db7d29f624d53b24, type: 2}
+  - {fileID: 2100000, guid: ff09005ee15d3a64db7d29f624d53b24, type: 2}
