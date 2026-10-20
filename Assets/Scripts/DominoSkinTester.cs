@@ -16,4 +16,10 @@ public class DominoSkinTester : MonoBehaviour
         DominoSkinManager.Instance?.EquipSkin(
             "domino_emerald_1");
     }
+
+    public void EquipAir()
+    {
+        DominoSkinManager.Instance?.EquipSkin(
+            "domino_air");
+    }
 }
