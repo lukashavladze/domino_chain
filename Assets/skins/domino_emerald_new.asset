@@ -16,9 +16,9 @@ MonoBehaviour:
   displayName: domino_air
   shopIcon: {fileID: 0}
   normalMaterials:
-  - {fileID: 2100000, guid: f9c33985f6587aa439a87e529b11669f, type: 2}
-  - {fileID: 2100000, guid: 6927bb3f3d49a4f4fb607aa0c00fe2e1, type: 2}
-  - {fileID: 2100000, guid: f9c33985f6587aa439a87e529b11669f, type: 2}
+  - {fileID: 2100000, guid: 51c42860a9c9b23449d0aeda47a57670, type: 2}
+  - {fileID: 2100000, guid: 51c42860a9c9b23449d0aeda47a57670, type: 2}
+  - {fileID: 2100000, guid: 1c6955d3a89730a4fbf0d76f6dbd4ce2, type: 2}
   firstDominoMaterials:
   - {fileID: 2100000, guid: 5dc0156e8632f174cb4b8591dd03cb88, type: 2}
   - {fileID: 2100000, guid: 5dc0156e8632f174cb4b8591dd03cb88, type: 2}

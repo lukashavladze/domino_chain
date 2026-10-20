@@ -89,9 +89,11 @@ Material:
     - _Blend: 0
     - _BlendModePreserveSpecular: 1
     - _BlendOp: 0
+    - _Brightness: 0.38
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
+    - _Contrast: 1.1
     - _Cull: 2
     - _Cutoff: 0.374
     - _DetailAlbedoMapScale: 1
@@ -99,15 +101,24 @@ Material:
     - _DstBlend: 0
     - _DstBlendAlpha: 0
     - _EnvironmentReflections: 1
+    - _Exposure: 1
+    - _FresnelPower: 4
+    - _FresnelStrength: 0.5
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
+    - _LightStrength: 0.7
     - _Metallic: 0.705
     - _OcclusionStrength: 1
     - _Parallax: 0.005
     - _QueueOffset: 0
     - _ReceiveShadows: 1
+    - _ReflectionAngle: 45
+    - _ReflectionSharpness: 48
+    - _ReflectionStrength: 1.2
     - _SampleGI: 0
+    - _SecondAngle: 135
+    - _SecondReflection: 0.45
     - _Smoothness: 0.631
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
@@ -120,7 +131,10 @@ Material:
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _DarkColor: {r: 0.17999998, g: 0.07499998, b: 0.012, a: 1}
     - _EmissionColor: {r: 1.0592737, g: 1.0592737, b: 1.0592737, a: 1}
+    - _FresnelColor: {r: 1, g: 0.78, b: 0.34999996, a: 1}
+    - _ReflectionColor: {r: 1, g: 0.85, b: 0.5, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
