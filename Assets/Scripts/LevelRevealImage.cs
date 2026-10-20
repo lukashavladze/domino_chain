@@ -7,9 +7,8 @@ public class LevelRevealImage : MonoBehaviour
     [SerializeField]
     private Renderer revealRenderer;
 
-    [Header("Shader")]
-    [SerializeField]
-    private string textureProperty = "_BaseMap";
+    private static readonly int MainTextureID =
+        Shader.PropertyToID("_MainTexture");
 
     private MaterialPropertyBlock propertyBlock;
 
@@ -36,10 +35,11 @@ public class LevelRevealImage : MonoBehaviour
         Material material = revealRenderer.sharedMaterial;
 
         if (material == null ||
-            !material.HasProperty(textureProperty))
+            !material.HasProperty(MainTextureID))
         {
             Debug.LogError(
-                $"Shader property {textureProperty} not found."
+                "LevelRevealImage: _MainTexture not found. " +
+                "Check RevealImage material and renderer."
             );
             return;
         }
@@ -50,13 +50,28 @@ public class LevelRevealImage : MonoBehaviour
         revealRenderer.GetPropertyBlock(propertyBlock);
 
         propertyBlock.SetTexture(
-            textureProperty,
+            MainTextureID,
             texture
         );
 
         revealRenderer.SetPropertyBlock(propertyBlock);
+        MaterialPropertyBlock checkBlock =
+    new MaterialPropertyBlock();
 
-        Debug.Log($"Reveal image assigned: {texture.name}");
+        revealRenderer.GetPropertyBlock(checkBlock);
+
+        Texture assignedTexture =
+            checkBlock.GetTexture(MainTextureID);
+
+        Debug.Log(
+            $"Renderer: {revealRenderer.name}, " +
+            $"Shader: {revealRenderer.sharedMaterial.shader.name}, " +
+            $"Assigned texture: {assignedTexture?.name ?? "NULL"}"
+        );
+
+        Debug.Log(
+            $"Reveal image assigned: {texture.name}"
+        );
     }
 
     public void LoadLevelImage(int levelNumber)

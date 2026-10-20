@@ -120,6 +120,13 @@ public class RevealPainter : MonoBehaviour
         }
 
         ResetFinalRevealShader();
+        Debug.Log(
+    $"REVEAL MASK CHECK: " +
+    $"Ground={groundMaterial.GetTexture("_RevealMask")?.name}, " +
+    $"Cover={coverMaterial?.GetTexture("_RevealMask")?.name}, " +
+    $"GroundShader={groundMaterial.shader.name}, " +
+    $"CoverShader={coverMaterial?.shader.name}"
+);
     }
 
 

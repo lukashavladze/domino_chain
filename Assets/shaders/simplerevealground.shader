@@ -240,19 +240,19 @@ Shader "Custom/SimpleRevealGround"
                 // =========================================
                 // FINAL ALPHA
                 // =========================================
-
-                float alpha =
+    
+    float alpha =
                     imageColor.a *
                     saturate(
                         reveal + wave
                     );
 
 
-                return half4(
+    return half4(
                     finalRGB,
                     alpha
                 );
-            }
+}
 
 
             ENDHLSL

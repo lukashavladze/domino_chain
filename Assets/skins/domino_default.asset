@@ -16,10 +16,10 @@ MonoBehaviour:
   displayName: Default
   shopIcon: {fileID: 0}
   normalMaterials:
-  - {fileID: 2100000, guid: 2e7e541219e8e194ea49e866066eaa13, type: 2}
-  - {fileID: 2100000, guid: 2e7e541219e8e194ea49e866066eaa13, type: 2}
-  - {fileID: 2100000, guid: 6fb05c3cd0c5c9846a5c18e509a4e375, type: 2}
+  - {fileID: 2100000, guid: 5b5cba3ab5513594f90db3cc8b3217da, type: 2}
+  - {fileID: 2100000, guid: 5b5cba3ab5513594f90db3cc8b3217da, type: 2}
+  - {fileID: 2100000, guid: e377fc36532e60c48b3dff895bac7be4, type: 2}
   firstDominoMaterials:
-  - {fileID: 2100000, guid: c58de09658276844781065ddaf33f20e, type: 2}
-  - {fileID: 2100000, guid: c58de09658276844781065ddaf33f20e, type: 2}
-  - {fileID: 2100000, guid: c58de09658276844781065ddaf33f20e, type: 2}
+  - {fileID: 2100000, guid: 2e7e541219e8e194ea49e866066eaa13, type: 2}
+  - {fileID: 2100000, guid: 2e7e541219e8e194ea49e866066eaa13, type: 2}
+  - {fileID: 2100000, guid: 1c6955d3a89730a4fbf0d76f6dbd4ce2, type: 2}
