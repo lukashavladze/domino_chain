@@ -191,6 +191,65 @@ public class ProceduralLevelGenerator : MonoBehaviour
     // PUZZLE GENERATION
     // =========================================================
 
+    private enum PuzzleGenerationMode
+    {
+        Random,
+        BlockerAware
+    }
+
+    [Header("Generation Strategy")]
+
+    [Header("Blocker Aware Generation")]
+
+    [Header("Guided Blocker Placement")]
+
+    [Tooltip("How many guided placements to try before giving up on a dependent line.")]
+    [Range(5, 100)]
+    [SerializeField]
+    private int guidedBlockerAttempts = 40;
+
+    [Tooltip("Maximum distance from the desired landing position to a grid cell.")]
+    [Min(0.01f)]
+    [SerializeField]
+    private float guidedLandingTolerance = 0.15f;
+
+    [Tooltip("Log guided placement results.")]
+    [SerializeField]
+    private bool logGuidedPlacement = false;
+
+
+    [Tooltip("Maximum initially playable lines in BlockerAware mode.")]
+    [Min(1)]
+    [SerializeField]
+    private int targetStarterLines = 4;
+
+    [Tooltip("Log when a candidate is rejected for creating too many playable lines.")]
+    [SerializeField]
+    private bool logBlockerAwareRejections = false;
+
+
+    [SerializeField]
+    private PuzzleGenerationMode generationMode =
+        PuzzleGenerationMode.Random;
+
+    [Tooltip("Maximum seconds allowed for one generation call.")]
+    [Min(1f)]
+    [SerializeField]
+    private float generationTimeLimit = 10f;
+
+    [Tooltip("Maximum candidate attempts for each complete level.")]
+    [Min(10)]
+    [SerializeField]
+    private int blockerAwareCandidateLimit = 150;
+
+    private float generationStartTime;
+
+    private bool GenerationTimeExpired()
+    {
+        return Time.realtimeSinceStartup -
+            generationStartTime >= generationTimeLimit;
+    }
+
     [Header("Puzzle Generation")]
 
     [Tooltip("Minimum dominoes in one generated line.")]
@@ -372,6 +431,8 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
     public void GenerateLevel()
     {
+        generationStartTime = Time.realtimeSinceStartup;
+
         if (!ValidateSettings())
             return;
 
@@ -421,9 +482,18 @@ public class ProceduralLevelGenerator : MonoBehaviour
         // =====================================================
 
         for (int attempt = 0;
-             attempt < maxGenerationAttempts;
-             attempt++)
+      attempt < maxGenerationAttempts;
+      attempt++)
         {
+            if (GenerationTimeExpired())
+            {
+                Debug.LogWarning(
+                    $"GENERATION TIME LIMIT REACHED | " +
+                    $"Level={levelNumber} | " +
+                    $"Limit={generationTimeLimit:F1}s");
+
+                break;
+            }
             // ---------------------------------------------
             // CLEAR PREVIOUS ATTEMPT
             // ---------------------------------------------
@@ -555,6 +625,24 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 }
 
                 continue;
+            }
+            // =====================================================
+            // BLOCKER-AWARE STARTER LINE VALIDATION
+            // =====================================================
+
+            if (generationMode == PuzzleGenerationMode.BlockerAware)
+            {
+                int playableCount = CountInitiallyPlayableLines();
+
+                if (playableCount > targetStarterLines)
+                {
+                    Debug.LogWarning(
+                        $"TOO MANY STARTERS | " +
+                        $"Playable={playableCount} | " +
+                        $"Maximum={targetStarterLines}");
+
+                    continue;
+                }
             }
 
             if (!ValidatePuzzleStructure())
@@ -878,6 +966,173 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
         return result;
     }
+
+
+    private bool TryFindNearestFreeCell(
+        Vector3 worldPosition,
+        out Vector2Int nearestCell)
+    {
+        nearestCell = default(Vector2Int);
+
+        if (board == null)
+            return false;
+
+        float bestDistanceSqr = float.MaxValue;
+        bool found = false;
+
+        for (int x = 0; x < board.Width; x++)
+        {
+            for (int y = 0; y < board.Height; y++)
+            {
+                Vector2Int cell = new Vector2Int(x, y);
+
+                if (board.IsOccupied(cell))
+                    continue;
+
+                Vector3 position = board.CellToWorld(cell);
+
+                Vector3 difference = position - worldPosition;
+                difference.y = 0f;
+
+                float distanceSqr = difference.sqrMagnitude;
+
+                if (distanceSqr < bestDistanceSqr)
+                {
+                    bestDistanceSqr = distanceSqr;
+                    nearestCell = cell;
+                    found = true;
+                }
+            }
+        }
+
+        return found &&
+            bestDistanceSqr <=
+            guidedLandingTolerance * guidedLandingTolerance;
+    }
+
+
+
+    private bool TryGenerateGuidedBlockedLine(int lineIndex)
+    {
+        if (generatedLines.Count == 0)
+            return false;
+
+        for (int attempt = 0;
+             attempt < guidedBlockerAttempts &&
+             !GenerationTimeExpired();
+             attempt++)
+        {
+            DominoLine blockerLine =
+                generatedLines[
+                    Random.Range(0, generatedLines.Count)];
+
+            if (blockerLine == null ||
+                blockerLine.dominoes == null ||
+                blockerLine.dominoes.Count == 0)
+            {
+                continue;
+            }
+
+            Domino targetDomino =
+                blockerLine.dominoes[
+                    Random.Range(0, blockerLine.dominoes.Count)];
+
+            if (targetDomino == null)
+                continue;
+
+            LineDirection lineDirection =
+                GetRandomLineDirection();
+
+            Vector2Int step =
+                GetDirectionStep(lineDirection);
+
+            Vector3 forward = new Vector3(
+                step.x * cellSize,
+                0f,
+                step.y * cellSize
+            ).normalized;
+
+            if (forward.sqrMagnitude < 0.001f)
+                continue;
+
+            // Use the same reach model as the current
+            // DominoBlockingCalculator.
+            BoxCollider targetBox =
+                dominoPrefab.GetComponentInChildren<BoxCollider>();
+
+            if (targetBox == null)
+                return false;
+
+            Vector3 scaledSize = Vector3.Scale(
+                targetBox.size,
+                targetBox.transform.lossyScale);
+
+            float dominoHeight =
+                Mathf.Abs(scaledSize.y);
+
+            float desiredReach =
+                dominoHeight *
+                blockingCalculator.fallReachMultiplier;
+
+            Vector3 desiredEnd =
+                targetDomino.transform.position -
+                forward * desiredReach;
+
+            if (!TryFindNearestFreeCell(
+                    desiredEnd,
+                    out Vector2Int endCell))
+            {
+                continue;
+            }
+
+            int length = Random.Range(
+                minDominoesPerLine,
+                maxDominoesPerLine + 1);
+
+            Vector2Int startCell =
+                endCell - step * (length - 1);
+
+            List<Vector2Int> path =
+                TryCreateStraightPath(
+                    startCell,
+                    step,
+                    length);
+
+            if (path == null || path.Count != length)
+                continue;
+
+            HashSet<Vector2Int> occupiedBefore =
+                CaptureOccupiedCells();
+
+            DominoLine candidate =
+                CreateProceduralLine(path, lineIndex);
+
+            if (candidate == null)
+                continue;
+
+            // Requires an actual dependency.
+            bool accepted = TryAcceptGeneratedLine(
+                candidate,
+                occupiedBefore,
+                true);
+
+            if (accepted)
+            {
+                if (logGuidedPlacement)
+                {
+                    Debug.Log(
+                        $"GUIDED BLOCKER ACCEPTED | " +
+                        $"Line={candidate.name} | " +
+                        $"Blockers={candidate.blockedByLines.Count}");
+                }
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
 
 
     private List<Vector3> CreateSCurve(
@@ -1378,11 +1633,46 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
         int attempts = 0;
 
+        int candidateLimit =
+            generationMode == PuzzleGenerationMode.BlockerAware
+                ? Mathf.Min(
+                    maxLineGenerationAttempts,
+                    blockerAwareCandidateLimit)
+                : maxLineGenerationAttempts;
+
         while (
             occupiedCells < targetOccupiedCells &&
-            attempts < maxLineGenerationAttempts)
+            attempts < candidateLimit &&
+            !GenerationTimeExpired())
         {
             attempts++;
+
+            // =====================================================
+            // BLOCKER-AWARE GUIDED GENERATION
+            // =====================================================
+
+            if (generationMode == PuzzleGenerationMode.BlockerAware &&
+                CountInitiallyPlayableLines() >= targetStarterLines)
+            {
+                bool guidedAccepted =
+                    TryGenerateGuidedBlockedLine(lineIndex);
+
+                if (guidedAccepted)
+                {
+                    lineIndex++;
+
+                    // Curved lines may reserve additional cells,
+                    // so use actual board occupancy.
+                    occupiedCells = board.GetOccupiedCells().Count;
+
+                    continue;
+                }
+
+                // Don't fall back to random unblocked lines.
+                // They would exceed our starter limit.
+                continue;
+            }
+
 
             // =============================================
             // TRY CURVED LINE
@@ -1683,17 +1973,106 @@ public class ProceduralLevelGenerator : MonoBehaviour
     }
 
 
+    private int CountInitiallyPlayableLines()
+    {
+        int count = 0;
+
+        foreach (DominoLine line in generatedLines)
+        {
+            if (line == null)
+                continue;
+
+            bool blocked = false;
+
+            if (line.blockedByLines != null)
+            {
+                foreach (DominoLine blocker in line.blockedByLines)
+                {
+                    if (blocker != null &&
+                        blocker != line &&
+                        generatedLines.Contains(blocker))
+                    {
+                        blocked = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!blocked)
+                count++;
+        }
+
+        return count;
+    }
+
+
     private bool TryAcceptGeneratedLine(
-        DominoLine candidate,
-        HashSet<Vector2Int> occupiedBefore)
+    DominoLine candidate,
+    HashSet<Vector2Int> occupiedBefore,
+    bool requireRealBlocker = false)
     {
         if (candidate == null)
             return false;
 
+
         generatedLines.Add(candidate);
 
-        if (ValidateCurrentPartialLevel())
+        bool physicallyValid = ValidateCurrentPartialLevel();
+
+        bool structureValid = true;
+
+        if (physicallyValid &&
+            generationMode == PuzzleGenerationMode.BlockerAware)
+        {
+            int playableCount = CountInitiallyPlayableLines();
+
+            if (playableCount > targetStarterLines)
+            {
+                structureValid = false;
+
+                if (logBlockerAwareRejections)
+                {
+                    Debug.Log(
+                        $"BLOCKER AWARE REJECT | " +
+                        $"Candidate={candidate.name} | " +
+                        $"Playable={playableCount} | " +
+                        $"Maximum={targetStarterLines}");
+                }
+            }
+        }
+
+
+        bool blockerValid = true;
+
+        if (physicallyValid && requireRealBlocker)
+        {
+            blockerValid = false;
+
+            if (candidate.blockedByLines != null)
+            {
+                HashSet<DominoLine> uniqueBlockers =
+                    new HashSet<DominoLine>();
+
+                foreach (DominoLine blocker in candidate.blockedByLines)
+                {
+                    if (blocker != null &&
+                        blocker != candidate &&
+                        generatedLines.Contains(blocker))
+                    {
+                        uniqueBlockers.Add(blocker);
+                    }
+                }
+
+                blockerValid =
+                    uniqueBlockers.Count >= minBlockersPerLine &&
+                    uniqueBlockers.Count <= maxBlockersPerLine;
+            }
+        }
+
+        if (physicallyValid && structureValid && blockerValid)
             return true;
+
+
 
         // Reject only this candidate.
         generatedLines.Remove(candidate);
@@ -1720,13 +2099,16 @@ public class ProceduralLevelGenerator : MonoBehaviour
         generatedLineCount = Mathf.Max(
             0, generatedLineCount - 1);
 
+        // Immediately exclude rejected geometry from physics.
+        candidate.gameObject.SetActive(false);
+
 #if UNITY_EDITOR
         if (!Application.isPlaying)
             DestroyImmediate(candidate.gameObject);
         else
             Destroy(candidate.gameObject);
 #else
-    Destroy(candidate.gameObject);
+Destroy(candidate.gameObject);
 #endif
 
         // Rebuild dependencies for the accepted lines.
