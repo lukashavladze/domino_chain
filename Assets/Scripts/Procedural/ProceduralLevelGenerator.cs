@@ -66,6 +66,10 @@ public class ProceduralLevelGenerator : MonoBehaviour
     private bool rejectOpposingEnds = true;
 
     [Header("Real Fall Sweep Validation")]
+    [Tooltip("Extra falling reach used during collision validation. 1.10 = 10% extra.")]
+    [Range(1f, 1.20f)]
+    [SerializeField]
+    private float fallDistanceMultiplier = 1.10f;
 
     [Tooltip("Number of orientations tested while a domino rotates from standing to fallen.")]
     [Range(4, 16)]
@@ -674,9 +678,18 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
             // Rotate collider center around its bottom pivot.
             Vector3 center =
-                pivot +
-                deltaRotation *
-                (standingCenter - pivot);
+    pivot +
+    deltaRotation *
+    (standingCenter - pivot);
+
+            // Extend the predicted falling reach by 5–10%.
+            Vector3 fallOffset = center - standingCenter;
+
+            float forwardDistance =
+                Mathf.Max(0f, Vector3.Dot(fallOffset, fallDirection));
+
+            center += fallDirection *
+                (forwardDistance * (fallDistanceMultiplier - 1f));
 
 
             Quaternion rotation =
