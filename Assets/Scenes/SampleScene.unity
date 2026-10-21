@@ -5343,9 +5343,10 @@ MonoBehaviour:
   allowArcLines: 1
   allowHalfCircleLines: 1
   allowCircleLines: 1
-  allowZigZagLines: 0
+  allowSCurveLines: 1
+  allowUShapeLines: 1
   allowStraightHalfCircleLines: 1
-  curvedLineChance: 0.75
+  curvedLineChance: 1
   minCurveRadius: 6
   maxCurveRadius: 12
   blockerChance: 0.75

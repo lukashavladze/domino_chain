@@ -24,8 +24,10 @@ public class ProceduralLevelGenerator : MonoBehaviour
         Arc,
         HalfCircle,
         Circle,
-        ZigZag,
+        SCurve,
+        UShape,
         StraightHalfCircle
+
     }
 
     // =========================================================
@@ -245,9 +247,13 @@ public class ProceduralLevelGenerator : MonoBehaviour
     [SerializeField]
     private bool allowCircleLines = true;
 
-    [Tooltip("Allow zigzag domino lines.")]
+    [Tooltip("Allow smooth S-shaped domino lines.")]
     [SerializeField]
-    private bool allowZigZagLines = true;
+    private bool allowSCurveLines = true;
+
+    [Tooltip("Allow U-shaped domino lines.")]
+    [SerializeField]
+    private bool allowUShapeLines = true;
 
     [Tooltip("Allow straight lines followed by a half-circle.")]
     [SerializeField]
@@ -840,39 +846,117 @@ public class ProceduralLevelGenerator : MonoBehaviour
         return result;
     }
 
-    private List<Vector3> CreateZigZag(
-    Vector3 start,
-    Vector3 forward,
-    float segmentLength,
-    float zigzagWidth,
-    int turns,
-    float spacing)
+
+    private List<Vector3> CreateSCurve(
+        Vector3 start,
+        Vector3 forward,
+        float length,
+        float width,
+        float spacing)
     {
         List<Vector3> points = new List<Vector3>();
 
         forward.y = 0f;
         forward.Normalize();
 
-        Vector3 right = Vector3.Cross(
-            Vector3.up, forward).normalized;
+        Vector3 right =
+            Vector3.Cross(Vector3.up, forward).normalized;
 
-        points.Add(start);
+        // Two opposite bends with smooth tangents.
+        int steps = Mathf.Max(
+            40,
+            Mathf.CeilToInt(length / 0.04f));
 
-        Vector3 current = start;
-
-        for (int i = 0; i < turns; i++)
+        for (int i = 0; i <= steps; i++)
         {
-            current += forward * segmentLength;
+            float t = i / (float)steps;
 
-            current += right *
-    (i == 0 ? zigzagWidth :
-        (i % 2 == 1 ? -2f * zigzagWidth : 2f * zigzagWidth));
+            // S-shaped transition from one side to the other.
+            // Zero lateral slope at both endpoints.
+            float smooth = t * t * (3f - 2f * t);
 
-            points.Add(current);
+            float lateral = (smooth - 0.5f) * width;
+
+            Vector3 position =
+                start +
+                forward * (length * t) +
+                right * lateral;
+
+            points.Add(position);
         }
 
         return SamplePath(points, spacing);
     }
+
+
+    private List<Vector3> CreateUShape(
+        Vector3 start,
+        Vector3 forward,
+        float legLength,
+        float radius,
+        float spacing)
+    {
+        List<Vector3> points = new List<Vector3>();
+
+        forward.y = 0f;
+        forward.Normalize();
+
+        Vector3 right =
+            Vector3.Cross(Vector3.up, forward).normalized;
+
+        // First straight leg.
+        int straightSteps = Mathf.Max(
+            12,
+            Mathf.CeilToInt(legLength / 0.04f));
+
+        for (int i = 0; i <= straightSteps; i++)
+        {
+            float t = i / (float)straightSteps;
+
+            points.Add(
+                start + forward * (legLength * t));
+        }
+
+        Vector3 firstLegEnd =
+            start + forward * legLength;
+
+        // Semicircle joining both legs.
+        Vector3 circleCenter =
+            firstLegEnd + right * radius;
+
+        int curveSteps = Mathf.Max(
+            24,
+            Mathf.CeilToInt(Mathf.PI * radius / 0.04f));
+
+        for (int i = 1; i <= curveSteps; i++)
+        {
+            float angle =
+                Mathf.PI * i / curveSteps;
+
+            Vector3 position =
+                circleCenter
+                - right * (Mathf.Cos(angle) * radius)
+                + forward * (Mathf.Sin(angle) * radius);
+
+            points.Add(position);
+        }
+
+        // Second straight leg, returning in the opposite direction.
+        Vector3 secondLegStart =
+            firstLegEnd + right * (2f * radius);
+
+        for (int i = 1; i <= straightSteps; i++)
+        {
+            float t = i / (float)straightSteps;
+
+            points.Add(
+                secondLegStart - forward * (legLength * t));
+        }
+
+        return SamplePath(points, spacing);
+    }
+
+
 
     private List<Vector3> CreateStraightHalfCircle(
     Vector3 start,
@@ -1175,14 +1259,15 @@ public class ProceduralLevelGenerator : MonoBehaviour
             // TRY CURVED LINE
             // =============================================
             bool tryCurved =
-                Random.value < curvedLineChance &&
-                (
-                    allowArcLines ||
-                    allowHalfCircleLines ||
-                    allowCircleLines ||
-                    allowZigZagLines ||
-                    allowStraightHalfCircleLines
-                );
+    Random.value < curvedLineChance &&
+    (
+        allowArcLines ||
+        allowHalfCircleLines ||
+        allowCircleLines ||
+        allowSCurveLines ||
+        allowUShapeLines ||
+        allowStraightHalfCircleLines
+    );
 
             if (tryCurved)
             {
@@ -1589,6 +1674,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
         ];
     }
 
+
     private PathShape GetRandomPathShape()
     {
         List<PathShape> available =
@@ -1603,8 +1689,11 @@ public class ProceduralLevelGenerator : MonoBehaviour
         if (allowCircleLines)
             available.Add(PathShape.Circle);
 
-        if (allowZigZagLines)
-            available.Add(PathShape.ZigZag);
+        if (allowSCurveLines)
+            available.Add(PathShape.SCurve);
+
+        if (allowUShapeLines)
+            available.Add(PathShape.UShape);
 
         if (allowStraightHalfCircleLines)
             available.Add(PathShape.StraightHalfCircle);
@@ -1616,6 +1705,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
             Random.Range(0, available.Count)
         ];
     }
+
     private class CurvedPath
     {
         public List<Vector3> positions =
@@ -1671,15 +1761,25 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
             List<Vector3> rawPositions = null;
 
+
             switch (shape)
             {
-                case PathShape.ZigZag:
-                    rawPositions = CreateZigZag(
+                case PathShape.SCurve:
+                    rawPositions = CreateSCurve(
                         start,
                         forward,
-                        1.2f,
-                        0.65f,
-                        3,
+                        Random.Range(1.8f, 2.6f),
+                        Random.Range(0.8f, 1.4f),
+                        spacing * 0.25f
+                    );
+                    break;
+
+                case PathShape.UShape:
+                    rawPositions = CreateUShape(
+                        start,
+                        forward,
+                        Random.Range(0.8f, 1.3f),
+                        Random.Range(0.45f, 0.75f),
                         spacing * 0.25f
                     );
                     break;
@@ -1697,6 +1797,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 default:
                     return null;
             }
+
 
             if (rawPositions == null ||
                 rawPositions.Count < 2)
@@ -1986,8 +2087,9 @@ public class ProceduralLevelGenerator : MonoBehaviour
     {
 
         // Handle the two new shapes separately.
-        if (shape == PathShape.ZigZag ||
-            shape == PathShape.StraightHalfCircle)
+        if (shape == PathShape.SCurve ||
+    shape == PathShape.UShape ||
+    shape == PathShape.StraightHalfCircle)
         {
             return TryCreateCompoundPath(shape);
         }
