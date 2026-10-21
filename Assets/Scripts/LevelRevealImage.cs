@@ -1,4 +1,3 @@
-
 using UnityEngine;
 
 public class LevelRevealImage : MonoBehaviour
@@ -10,67 +9,56 @@ public class LevelRevealImage : MonoBehaviour
     private static readonly int MainTextureID =
         Shader.PropertyToID("_MainTexture");
 
-    private MaterialPropertyBlock propertyBlock;
+    private Material runtimeMaterial;
 
     private void Awake()
     {
         if (revealRenderer == null)
         {
             Debug.LogError(
-                "LevelRevealImage: Reveal Renderer is missing!"
+                "LevelRevealImage: Reveal Renderer missing!"
             );
+
+            return;
         }
+
+        runtimeMaterial = revealRenderer.material;
     }
 
     public void SetImage(Texture texture)
     {
         if (revealRenderer == null || texture == null)
         {
-            Debug.LogWarning(
-                "LevelRevealImage: Cannot assign image."
+            Debug.LogError(
+                "LevelRevealImage: Renderer or texture missing."
             );
+
             return;
         }
 
-        Material material = revealRenderer.sharedMaterial;
+        if (runtimeMaterial == null)
+        {
+            runtimeMaterial = revealRenderer.material;
+        }
 
-        if (material == null ||
-            !material.HasProperty(MainTextureID))
+        if (!runtimeMaterial.HasProperty(MainTextureID))
         {
             Debug.LogError(
-                "LevelRevealImage: _MainTexture not found. " +
-                "Check RevealImage material and renderer."
+                "LevelRevealImage: _MainTexture not found!"
             );
+
             return;
         }
 
-        if (propertyBlock == null)
-            propertyBlock = new MaterialPropertyBlock();
-
-        revealRenderer.GetPropertyBlock(propertyBlock);
-
-        propertyBlock.SetTexture(
+        runtimeMaterial.SetTexture(
             MainTextureID,
             texture
         );
 
-        revealRenderer.SetPropertyBlock(propertyBlock);
-        MaterialPropertyBlock checkBlock =
-    new MaterialPropertyBlock();
-
-        revealRenderer.GetPropertyBlock(checkBlock);
-
-        Texture assignedTexture =
-            checkBlock.GetTexture(MainTextureID);
-
         Debug.Log(
-            $"Renderer: {revealRenderer.name}, " +
-            $"Shader: {revealRenderer.sharedMaterial.shader.name}, " +
-            $"Assigned texture: {assignedTexture?.name ?? "NULL"}"
-        );
-
-        Debug.Log(
-            $"Reveal image assigned: {texture.name}"
+            $"REVEAL IMAGE ASSIGNED: {texture.name} | " +
+            $"Material: {runtimeMaterial.name} | " +
+            $"Shader: {runtimeMaterial.shader.name}"
         );
     }
 
@@ -84,9 +72,10 @@ public class LevelRevealImage : MonoBehaviour
 
         if (image == null)
         {
-            Debug.LogWarning(
-                $"Level image missing: {path}"
+            Debug.LogError(
+                $"LEVEL IMAGE NOT FOUND: {path}"
             );
+
             return;
         }
 
