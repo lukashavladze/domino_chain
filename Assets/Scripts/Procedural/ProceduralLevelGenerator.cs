@@ -1654,8 +1654,27 @@ public class ProceduralLevelGenerator : MonoBehaviour
             if (generationMode == PuzzleGenerationMode.BlockerAware &&
                 CountInitiallyPlayableLines() >= targetStarterLines)
             {
-                bool guidedAccepted =
-                    TryGenerateGuidedBlockedLine(lineIndex);
+                bool guidedAccepted = false;
+
+                bool preferCurved =
+                    Random.value < curvedLineChance &&
+                    (allowArcLines ||
+                     allowHalfCircleLines ||
+                     allowCircleLines ||
+                     allowSCurveLines ||
+                     allowUShapeLines ||
+                     allowStraightHalfCircleLines);
+
+                if (preferCurved)
+                {
+                    guidedAccepted =
+                        TryGenerateGuidedCurvedBlockedLine(lineIndex);
+                }
+                else
+                {
+                    guidedAccepted =
+                        TryGenerateGuidedBlockedLine(lineIndex);
+                }
 
                 if (guidedAccepted)
                 {
@@ -4482,6 +4501,181 @@ Destroy(candidate.gameObject);
 
         visiting.Remove(line);
         return true;
+    }
+
+    private bool TryGenerateGuidedCurvedBlockedLine(int lineIndex)
+    {
+        if (generatedLines.Count == 0 ||
+            dominoPrefab == null ||
+            blockingCalculator == null)
+            return false;
+
+        BoxCollider prefabBox =
+            dominoPrefab.GetComponentInChildren<BoxCollider>();
+
+        if (prefabBox == null)
+            return false;
+
+        Vector3 size = Vector3.Scale(
+            prefabBox.size,
+            prefabBox.transform.lossyScale);
+
+        float reach =
+            Mathf.Abs(size.y) *
+            blockingCalculator.fallReachMultiplier;
+
+        for (int attempt = 0;
+             attempt < guidedBlockerAttempts &&
+             !GenerationTimeExpired();
+             attempt++)
+        {
+            DominoLine blocker =
+                generatedLines[Random.Range(0, generatedLines.Count)];
+
+            if (blocker == null ||
+                blocker.dominoes == null ||
+                blocker.dominoes.Count == 0)
+                continue;
+
+            Domino target =
+                blocker.dominoes[Random.Range(0, blocker.dominoes.Count)];
+
+            if (target == null)
+                continue;
+
+            PathShape shape = GetRandomPathShape();
+
+            if (shape == PathShape.Straight)
+                continue;
+
+            CurvedPath source = TryCreateCurvedPath(shape);
+
+            if (source == null || source.positions.Count < 2)
+                continue;
+
+            int lastIndex = source.positions.Count - 1;
+
+            Vector3 originalDirection =
+                source.positions[lastIndex] -
+                source.positions[lastIndex - 1];
+
+            originalDirection.y = 0f;
+
+            if (originalDirection.sqrMagnitude < 0.0001f)
+                continue;
+
+            originalDirection.Normalize();
+
+            LineDirection selectedDirection =
+                GetRandomLineDirection();
+
+            Vector2Int step = GetDirectionStep(selectedDirection);
+
+            Vector3 forward =
+                new Vector3(step.x, 0f, step.y).normalized;
+
+            if (forward.sqrMagnitude < 0.0001f)
+                continue;
+
+            Quaternion rotation = Quaternion.FromToRotation(
+                originalDirection,
+                forward);
+
+            Vector3 desiredEnd =
+                target.transform.position -
+                forward * reach;
+
+            desiredEnd.y = source.positions[lastIndex].y;
+
+            Vector3 sourceEnd = source.positions[lastIndex];
+
+            CurvedPath candidatePath = new CurvedPath();
+            HashSet<Vector2Int> usedCells = new HashSet<Vector2Int>();
+
+            bool valid = true;
+
+            for (int i = 0; i < source.positions.Count; i++)
+            {
+                Vector3 position =
+                    desiredEnd +
+                    rotation * (source.positions[i] - sourceEnd);
+
+                Vector2Int cell = board.WorldToCell(position);
+
+                if (!board.IsInside(cell))
+                {
+                    valid = false;
+                    break;
+                }
+
+                if (usedCells.Add(cell))
+                {
+                    if (!IsCellClearFromOtherLines(
+                            cell, segmentGapCells))
+                    {
+                        valid = false;
+                        break;
+                    }
+
+                    candidatePath.occupiedCells.Add(cell);
+                }
+
+                candidatePath.positions.Add(position);
+
+                Vector3 direction =
+                    rotation * source.directions[i];
+
+                direction.y = 0f;
+
+                if (direction.sqrMagnitude < 0.0001f)
+                {
+                    valid = false;
+                    break;
+                }
+
+                candidatePath.directions.Add(direction.normalized);
+            }
+
+            if (!valid)
+                continue;
+
+            if (!HasEnoughCurvedPhysicalClearance(candidatePath))
+                continue;
+
+            if (!HasSafeInternalCurvedFallCorridors(candidatePath))
+                continue;
+
+            // Do not run cross-line fall corridor rejection here:
+            // the final domino must be allowed to hit its intended
+            // blocker. Existing partial-level validation remains
+            // responsible for physical safety and solvability.
+
+            HashSet<Vector2Int> occupiedBefore =
+                CaptureOccupiedCells();
+
+            DominoLine candidate =
+                CreateCurvedProceduralLine(candidatePath, lineIndex);
+
+            if (candidate == null)
+                continue;
+
+            if (TryAcceptGeneratedLine(
+                    candidate,
+                    occupiedBefore,
+                    true))
+            {
+                if (logGuidedPlacement)
+                {
+                    Debug.Log(
+                        $"GUIDED CURVED ACCEPTED | Shape={shape} | " +
+                        $"Line={candidate.name}");
+                }
+
+                return true;
+            }
+        }
+
+        return false;
     }
 
 
