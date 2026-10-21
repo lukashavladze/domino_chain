@@ -279,21 +279,47 @@ public class ProceduralLevelGenerator : MonoBehaviour
     // BLOCKING
     // =========================================================
 
-    [Header("Blocking")]
 
-    [Tooltip(
-        "Chance that a generated line depends on an earlier line."
-    )]
+    [Header("Blocking Targets")]
+
+    [SerializeField]
+    private bool enforcePuzzleStructure = false;
+
+    [Tooltip("Target fraction of lines that have at least one blocker.")]
     [Range(0f, 1f)]
     [SerializeField]
-    private float blockerChance = 0.75f;
+    private float blockerChance = 0.50f;
 
-    [Tooltip(
-        "Maximum number of prerequisite lines for a generated line."
-    )]
+    [Tooltip("Allowed difference from the target blocked-line percentage.")]
+    [Range(0f, 0.50f)]
+    [SerializeField]
+    private float blockerChanceTolerance = 0.15f;
+
+    [Tooltip("Minimum blockers for a line that is blocked.")]
     [Range(1, 3)]
     [SerializeField]
-    private int maxBlockersPerLine = 1;
+    private int minBlockersPerLine = 1;
+
+    [Tooltip("Maximum blockers for a line that is blocked.")]
+    [Range(1, 3)]
+    [SerializeField]
+    private int maxBlockersPerLine = 2;
+
+    [Header("Playable Line Targets")]
+
+    [Min(1)]
+    [SerializeField]
+    private int minInitialPlayableLines = 2;
+
+    [Min(1)]
+    [SerializeField]
+    private int maxInitialPlayableLines = 5;
+
+    [Header("Puzzle Structure Debug")]
+
+    [SerializeField]
+    private bool logPuzzleStructure = true;
+
 
 
     // =========================================================
@@ -531,7 +557,14 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 continue;
             }
 
+            if (!ValidatePuzzleStructure())
+            {
+                Debug.LogWarning(
+                    $"PUZZLE STRUCTURE REJECTED | " +
+                    $"Attempt {attempt + 1} | Seed {seed}");
 
+                continue;
+            }
 
 
 
@@ -1010,6 +1043,102 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
         return SamplePath(points, spacing);
     }
+
+
+    private bool ValidatePuzzleStructure()
+    {
+        int totalLines = 0;
+        int blockedLines = 0;
+        int playableLines = 0;
+        int totalBlockerLinks = 0;
+        int maximumBlockersFound = 0;
+
+        foreach (DominoLine line in generatedLines)
+        {
+            if (line == null)
+                continue;
+
+            totalLines++;
+
+            int blockers = 0;
+
+            if (line.blockedByLines != null)
+            {
+                HashSet<DominoLine> uniqueBlockers =
+                    new HashSet<DominoLine>();
+
+                foreach (DominoLine blocker in line.blockedByLines)
+                {
+                    if (blocker != null &&
+                        blocker != line &&
+                        generatedLines.Contains(blocker))
+                    {
+                        uniqueBlockers.Add(blocker);
+                    }
+                }
+
+                blockers = uniqueBlockers.Count;
+            }
+
+            totalBlockerLinks += blockers;
+
+            maximumBlockersFound =
+                Mathf.Max(maximumBlockersFound, blockers);
+
+            if (blockers == 0)
+            {
+                playableLines++;
+            }
+            else
+            {
+                blockedLines++;
+
+                if (enforcePuzzleStructure &&
+                    (blockers < minBlockersPerLine ||
+                     blockers > maxBlockersPerLine))
+                {
+                    return false;
+                }
+            }
+        }
+
+        if (totalLines == 0)
+            return false;
+
+        float actualBlockerChance =
+            (float)blockedLines / totalLines;
+
+        if (logPuzzleStructure)
+        {
+            Debug.Log(
+                $"PUZZLE STRUCTURE | " +
+                $"Lines={totalLines} | " +
+                $"InitiallyPlayable={playableLines} | " +
+                $"BlockedLines={blockedLines} | " +
+                $"BlockedPercent={actualBlockerChance * 100f:F1}% | " +
+                $"BlockerLinks={totalBlockerLinks} | " +
+                $"MaxBlockersFound={maximumBlockersFound}");
+        }
+
+        if (!enforcePuzzleStructure)
+            return true;
+
+        if (playableLines < minInitialPlayableLines ||
+            playableLines > maxInitialPlayableLines)
+        {
+            return false;
+        }
+
+        if (Mathf.Abs(
+                actualBlockerChance - blockerChance) >
+            blockerChanceTolerance)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
 
     private Vector3 GetActualDominoFallDirection(
     DominoLine line,
