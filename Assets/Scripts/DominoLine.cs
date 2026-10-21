@@ -191,47 +191,21 @@ public class DominoLine : MonoBehaviour
 
        
     }
+
     private bool IsBlocked()
     {
-        // ==============================================
-        // 1. GENERATED DEPENDENCIES
-        // ==============================================
-
+        // Procedural levels use their validated
+        // generated dependency relationships.
         if (useGeneratedBlocking)
         {
-            foreach (DominoLine blocker in blockedByLines)
-            {
-                if (blocker == null)
-                    continue;
-
-                if (!blocker.HasStartedLine)
-                {
-                    //Debug.Log(
-                    //    $"{name} BLOCKED BY GENERATED DEPENDENCY: " +
-                    //    $"{blocker.name}");
-
-                    return true;
-                }
-            }
+            return IsProcedurallyBlocked();
         }
 
-        // ==============================================
-        // 2. REAL PHYSICAL BLOCKING
-        // ==============================================
-
-        if (IsPhysicallyBlocked())
-        {
-            //Debug.Log(
-            //    $"{name} BLOCKED BY PHYSICAL CHECK");
-
-            return true;
-        }
-
-        //Debug.Log(
-        //    $"{name} IS FREE");
-
-        return false;
+        // Manually created levels can continue
+        // using runtime physics detection.
+        return IsPhysicallyBlocked();
     }
+
 
     private bool IsPhysicallyBlocked()
     {
@@ -480,8 +454,13 @@ public class DominoLine : MonoBehaviour
                 box.size,
                 box.transform.lossyScale);
 
-        float width =
-            Mathf.Abs(size.x);
+        //float width =
+        //    Mathf.Abs(size.x);
+
+        float width = Mathf.Max(
+    Mathf.Abs(size.x),
+    Mathf.Abs(size.z)
+);
 
         float height =
             Mathf.Abs(size.y);
@@ -501,11 +480,12 @@ public class DominoLine : MonoBehaviour
                 direction,
                 Vector3.up);
 
-        Vector3 drawSize =
-            new Vector3(
-                width + fallCheckPadding * 2f,
-                thickness,
-                height + fallCheckPadding * 2f);
+        Vector3 drawSize = new Vector3(
+    width + fallCheckPadding * 2f,
+    0.03f,
+    height * fallReachMultiplier
+        + fallCheckPadding * 2f
+);
 
         Matrix4x4 oldMatrix =
             Gizmos.matrix;

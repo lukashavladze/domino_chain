@@ -23,7 +23,9 @@ public class ProceduralLevelGenerator : MonoBehaviour
         Straight,
         Arc,
         HalfCircle,
-        Circle
+        Circle,
+        ZigZag,
+        StraightHalfCircle
     }
 
     // =========================================================
@@ -85,6 +87,27 @@ public class ProceduralLevelGenerator : MonoBehaviour
     // =========================================================
     // PREFABS
     // =========================================================
+
+    [Header("Collision Validation Debug")]
+    [SerializeField]
+    private bool preserveRejectedLevel = false;
+
+    [SerializeField]
+    private bool drawRejectedCollision = true;
+
+    [SerializeField]
+    private bool logCollisionDetails = true;
+
+    private Domino rejectedFallingDomino;
+    private Domino rejectedStandingDomino;
+
+    private Vector3 rejectedSweepCenter;
+    private Vector3 rejectedSweepHalfExtents;
+    private Quaternion rejectedSweepRotation;
+
+    private float rejectedFallAngle;
+    private bool hasRejectedCollision;
+
 
     [Header("Prefabs")]
 
@@ -217,6 +240,14 @@ public class ProceduralLevelGenerator : MonoBehaviour
     [Tooltip("Allow full-circle lines.")]
     [SerializeField]
     private bool allowCircleLines = true;
+
+    [Tooltip("Allow zigzag domino lines.")]
+    [SerializeField]
+    private bool allowZigZagLines = true;
+
+    [Tooltip("Allow straight lines followed by a half-circle.")]
+    [SerializeField]
+    private bool allowStraightHalfCircleLines = true;
 
     [Tooltip("Chance that a generated line will try to be curved instead of straight.")]
     [Range(0f, 1f)]
@@ -360,7 +391,15 @@ public class ProceduralLevelGenerator : MonoBehaviour
             // ---------------------------------------------
             // CLEAR PREVIOUS ATTEMPT
             // ---------------------------------------------
+            hasRejectedCollision = false;
 
+            rejectedFallingDomino = null;
+            rejectedStandingDomino = null;
+
+            rejectedSweepCenter = Vector3.zero;
+            rejectedSweepHalfExtents = Vector3.zero;
+            rejectedSweepRotation = Quaternion.identity;
+            rejectedFallAngle = 0f;
             ClearLevel();
 
             // ---------------------------------------------
@@ -402,6 +441,22 @@ public class ProceduralLevelGenerator : MonoBehaviour
             // ---------------------------------------------
 
             GenerateSegmentedCoverage();
+            int occupiedCells = 0;
+
+            for (int x = 0; x < board.Width; x++)
+            {
+                for (int y = 0; y < board.Height; y++)
+                {
+                    if (board.IsOccupied(new Vector2Int(x, y)))
+                    {
+                        occupiedCells++;
+                    }
+                }
+            }
+
+            float actualFill =
+                (float)occupiedCells /
+                (board.Width * board.Height);
 
             // ---------------------------------------------
             // MAKE SURE CONNECTIONS ARE CURRENT
@@ -452,17 +507,25 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 Debug.LogWarning(
                     $"INVALID PLAYABLE PHYSICAL LAYOUT | " +
                     $"Attempt {attempt + 1} | " +
-                    $"Seed {seed} | Regenerating..."
-                );
+                    $"Seed {seed}");
+
+                if (preserveRejectedLevel)
+                {
+                    Debug.LogWarning(
+                        "DEBUG: Rejected level preserved. " +
+                        "Inspect the highlighted dominoes in Scene view.");
+
+                    return;
+                }
 
                 continue;
             }
 
-            bool solvable = true;
 
-            if (solvable)
-            {
-                Debug.Log(
+
+
+
+            Debug.Log(
                     $"VALID LEVEL {levelNumber} | " +
                     $"Attempt {attempt + 1} | " +
                     $"Ground {groundSize.x:F2} x {groundSize.y:F2} | " +
@@ -474,12 +537,6 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 DebugGeneratedDependencies();
 
                 return;
-            }
-
-            Debug.LogWarning(
-                $"INVALID LEVEL | " +
-                $"Attempt {attempt + 1} | " +
-                $"Seed {seed} | Regenerating...");
         }
 
         // =====================================================
@@ -688,19 +745,173 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 }
 
 
-                Debug.LogWarning(
-                    $"PLAYABLE FALL COLLISION | " +
-                    $"{fallingLine.name}/" +
-                    $"{fallingDomino.name} -> " +
-                    $"{otherLine.name}/" +
-                    $"{other.name} | " +
-                    $"Angle={angle:F1}");
+                if (!hasRejectedCollision)
+                {
+                    hasRejectedCollision = true;
+
+                    rejectedFallingDomino = fallingDomino;
+                    rejectedStandingDomino = other;
+
+                    rejectedSweepCenter = center;
+                    rejectedSweepHalfExtents = halfExtents;
+                    rejectedSweepRotation = rotation;
+
+                    rejectedFallAngle = angle;
+                }
+
+                if (logCollisionDetails)
+                {
+                    Debug.LogWarning(
+                        $"PLAYABLE FALL COLLISION | " +
+                        $"{fallingLine.name}/{fallingDomino.name} -> " +
+                        $"{otherLine.name}/{other.name} | " +
+                        $"Angle={angle:F1} | " +
+                        $"FallDirection={fallDirection} | " +
+                        $"SweepCenter={center} | " +
+                        $"SweepHalfExtents={halfExtents}",
+                        fallingDomino);
+                }
 
                 return true;
             }
         }
 
         return false;
+    }
+
+    private List<Vector3> SamplePath(
+    List<Vector3> controlPoints,
+    float spacing)
+    {
+        List<Vector3> result = new List<Vector3>();
+
+        if (controlPoints == null ||
+            controlPoints.Count < 2 ||
+            spacing <= 0f)
+            return result;
+
+        result.Add(controlPoints[0]);
+
+        float distanceSinceLast = 0f;
+
+        for (int i = 1; i < controlPoints.Count; i++)
+        {
+            Vector3 a = controlPoints[i - 1];
+            Vector3 b = controlPoints[i];
+
+            Vector3 delta = b - a;
+            float length = delta.magnitude;
+
+            if (length < 0.0001f)
+                continue;
+
+            Vector3 direction = delta / length;
+            float traveled = 0f;
+
+            while (distanceSinceLast + length - traveled
+                   >= spacing - 0.00001f)
+            {
+                float step = spacing - distanceSinceLast;
+
+                traveled += step;
+
+                Vector3 point = a + direction * traveled;
+                result.Add(point);
+
+                distanceSinceLast = 0f;
+            }
+
+            distanceSinceLast += length - traveled;
+        }
+
+        return result;
+    }
+
+    private List<Vector3> CreateZigZag(
+    Vector3 start,
+    Vector3 forward,
+    float segmentLength,
+    float zigzagWidth,
+    int turns,
+    float spacing)
+    {
+        List<Vector3> points = new List<Vector3>();
+
+        forward.y = 0f;
+        forward.Normalize();
+
+        Vector3 right = Vector3.Cross(
+            Vector3.up, forward).normalized;
+
+        points.Add(start);
+
+        Vector3 current = start;
+
+        for (int i = 0; i < turns; i++)
+        {
+            current += forward * segmentLength;
+
+            current += right *
+    (i == 0 ? zigzagWidth :
+        (i % 2 == 1 ? -2f * zigzagWidth : 2f * zigzagWidth));
+
+            points.Add(current);
+        }
+
+        return SamplePath(points, spacing);
+    }
+
+    private List<Vector3> CreateStraightHalfCircle(
+    Vector3 start,
+    Vector3 forward,
+    float straightLength,
+    float radius,
+    float spacing)
+    {
+        List<Vector3> points = new List<Vector3>();
+
+        forward.y = 0f;
+        forward.Normalize();
+
+        Vector3 right = Vector3.Cross(
+            Vector3.up, forward).normalized;
+
+        // Straight segment.
+        int straightSteps = Mathf.Max(
+            2, Mathf.CeilToInt(straightLength / 0.05f));
+
+        for (int i = 0; i <= straightSteps; i++)
+        {
+            float t = i / (float)straightSteps;
+
+            points.Add(
+                start + forward * (straightLength * t));
+        }
+
+        Vector3 straightEnd =
+            start + forward * straightLength;
+
+        // Circle center to the right of the straight end.
+        Vector3 circleCenter =
+            straightEnd + right * radius;
+
+        int curveSteps = Mathf.Max(
+            12, Mathf.CeilToInt(Mathf.PI * radius / 0.05f));
+
+        for (int i = 1; i <= curveSteps; i++)
+        {
+            float angle =
+                Mathf.PI * i / curveSteps;
+
+            Vector3 point =
+    circleCenter
+    - right * (Mathf.Cos(angle) * radius)
+    + forward * (Mathf.Sin(angle) * radius);
+
+            points.Add(point);
+        }
+
+        return SamplePath(points, spacing);
     }
 
     private Vector3 GetActualDominoFallDirection(
@@ -950,13 +1161,14 @@ public class ProceduralLevelGenerator : MonoBehaviour
             // =============================================
             // TRY CURVED LINE
             // =============================================
-
             bool tryCurved =
                 Random.value < curvedLineChance &&
                 (
                     allowArcLines ||
                     allowHalfCircleLines ||
-                    allowCircleLines
+                    allowCircleLines ||
+                    allowZigZagLines ||
+                    allowStraightHalfCircleLines
                 );
 
             if (tryCurved)
@@ -965,44 +1177,50 @@ public class ProceduralLevelGenerator : MonoBehaviour
                     GetRandomPathShape();
 
                 CurvedPath curvedPath =
-                    TryCreateCurvedPath(shape);
+     TryCreateCurvedPath(shape);
 
                 if (curvedPath == null ||
                     curvedPath.positions.Count < 2)
                 {
+                    Debug.Log($"REJECT {shape}: Path creation");
                     continue;
                 }
 
-                if (!IsCurvedCandidateEndSafe(
-                        curvedPath))
+                if (!IsCurvedCandidateEndSafe(curvedPath))
                 {
+                    Debug.Log($"REJECT {shape}: End safety");
                     continue;
                 }
 
-                if (!HasEnoughCurvedPhysicalClearance(
-        curvedPath))
+                if (!HasEnoughCurvedPhysicalClearance(curvedPath))
                 {
+                    Debug.Log($"REJECT {shape}: Physical clearance");
                     continue;
                 }
 
-                if (!HasSafeCurvedFallCorridors(
-        curvedPath))
+                if (!HasSafeCurvedFallCorridors(curvedPath))
                 {
+                    Debug.Log($"REJECT {shape}: Fall corridors");
                     continue;
                 }
 
-                if (!HasSafeInternalCurvedFallCorridors(
-        curvedPath))
-
+                if (!HasSafeInternalCurvedFallCorridors(curvedPath))
                 {
+                    Debug.Log($"REJECT {shape}: Internal fall corridors");
                     continue;
                 }
 
-                if (!HasSafeCurvedSweepAgainstOtherLines(
-        curvedPath))
+                if (!HasSafeCurvedSweepAgainstOtherLines(curvedPath))
                 {
+                    Debug.Log($"REJECT {shape}: Sweep against other lines");
                     continue;
                 }
+
+                Debug.Log($"ACCEPTED {shape}: {curvedPath.positions.Count} dominoes");
+
+
+                HashSet<Vector2Int> curvedOccupiedBefore =
+    CaptureOccupiedCells();
 
                 DominoLine curvedLine =
                     CreateCurvedProceduralLine(
@@ -1012,13 +1230,16 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 if (curvedLine == null)
                     continue;
 
-                generatedLines.Add(
-                    curvedLine);
+                if (!TryAcceptGeneratedLine(
+        curvedLine,
+        curvedOccupiedBefore))
+                {
+                    continue;
+                }
 
                 lineIndex++;
 
-                occupiedCells +=
-                    curvedPath.occupiedCells.Count;
+                occupiedCells += curvedPath.occupiedCells.Count;
 
                 continue;
             }
@@ -1062,6 +1283,9 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 continue;
             }
 
+            HashSet<Vector2Int> occupiedBefore =
+    CaptureOccupiedCells();
+
             DominoLine line =
                 CreateProceduralLine(
                     path,
@@ -1070,12 +1294,11 @@ public class ProceduralLevelGenerator : MonoBehaviour
             if (line == null)
                 continue;
 
-            generatedLines.Add(line);
+            if (!TryAcceptGeneratedLine(line, occupiedBefore))
+                continue;
 
             lineIndex++;
-
-            occupiedCells +=
-                path.Count;
+            occupiedCells += path.Count;
         }
 
         Debug.Log(
@@ -1084,9 +1307,9 @@ public class ProceduralLevelGenerator : MonoBehaviour
             $"Attempts: {attempts}");
     }
 
-    
 
-    
+
+
 
     private float DistancePointToSegmentXZ(
     Vector3 point,
@@ -1214,6 +1437,86 @@ public class ProceduralLevelGenerator : MonoBehaviour
         return true;
     }
 
+    private bool ValidateCurrentPartialLevel()
+    {
+        foreach (DominoLine line in generatedLines)
+        {
+            if (line != null)
+                line.AutoConnect();
+        }
+
+        Physics.SyncTransforms();
+
+        blockingCalculator.CalculateBlocking(generatedLines);
+
+        if (!validator.IsLevelSolvable(generatedLines))
+            return false;
+
+        return ValidatePlayableFallOrder();
+    }
+
+
+    private bool TryAcceptGeneratedLine(
+        DominoLine candidate,
+        HashSet<Vector2Int> occupiedBefore)
+    {
+        if (candidate == null)
+            return false;
+
+        generatedLines.Add(candidate);
+
+        if (ValidateCurrentPartialLevel())
+            return true;
+
+        // Reject only this candidate.
+        generatedLines.Remove(candidate);
+
+        // Restore board occupancy to its previous state.
+        for (int x = 0; x < board.Width; x++)
+        {
+            for (int y = 0; y < board.Height; y++)
+            {
+                Vector2Int cell = new Vector2Int(x, y);
+
+                if (!occupiedBefore.Contains(cell))
+                    board.Free(cell);
+            }
+        }
+
+        int removedDominoes = candidate.dominoes != null
+            ? candidate.dominoes.Count
+            : candidate.GetComponentsInChildren<Domino>().Length;
+
+        generatedDominoCount = Mathf.Max(
+            0, generatedDominoCount - removedDominoes);
+
+        generatedLineCount = Mathf.Max(
+            0, generatedLineCount - 1);
+
+#if UNITY_EDITOR
+        if (!Application.isPlaying)
+            DestroyImmediate(candidate.gameObject);
+        else
+            Destroy(candidate.gameObject);
+#else
+    Destroy(candidate.gameObject);
+#endif
+
+        // Rebuild dependencies for the accepted lines.
+        Physics.SyncTransforms();
+
+        blockingCalculator.CalculateBlocking(generatedLines);
+
+        return false;
+    }
+
+
+    private HashSet<Vector2Int> CaptureOccupiedCells()
+    {
+        return new HashSet<Vector2Int>(
+            board.GetOccupiedCells());
+    }
+
     private LineDirection GetRandomLineDirection()
     {
         List<LineDirection> available =
@@ -1287,6 +1590,12 @@ public class ProceduralLevelGenerator : MonoBehaviour
         if (allowCircleLines)
             available.Add(PathShape.Circle);
 
+        if (allowZigZagLines)
+            available.Add(PathShape.ZigZag);
+
+        if (allowStraightHalfCircleLines)
+            available.Add(PathShape.StraightHalfCircle);
+
         if (available.Count == 0)
             return PathShape.Straight;
 
@@ -1307,9 +1616,368 @@ public class ProceduralLevelGenerator : MonoBehaviour
     }
 
 
+    private CurvedPath TryCreateCompoundPath(PathShape shape)
+    {
+        if (board == null)
+            return null;
+
+        // Enable temporarily to see why candidates fail.
+        const bool logRejections = false;
+
+        // Try several different positions and rotations
+        // before giving up on the shape.
+        const int maxAttempts = 30;
+
+        float spacing = Mathf.Max(0.05f, dominoSpacing);
+        float minDistance = spacing * 0.98f;
+
+        for (int attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            // -----------------------------------------
+            // 1. Random starting position
+            // -----------------------------------------
+
+            Vector2Int startCell = new Vector2Int(
+                Random.Range(0, board.Width),
+                Random.Range(0, board.Height)
+            );
+
+            Vector3 start = board.CellToWorld(startCell);
+
+            float angle = Random.Range(0f, 360f);
+
+            Vector3 forward = new Vector3(
+                Mathf.Cos(angle * Mathf.Deg2Rad),
+                0f,
+                Mathf.Sin(angle * Mathf.Deg2Rad)
+            ).normalized;
+
+            // -----------------------------------------
+            // 2. Generate original shape
+            // -----------------------------------------
+
+            List<Vector3> rawPositions = null;
+
+            switch (shape)
+            {
+                case PathShape.ZigZag:
+                    rawPositions = CreateZigZag(
+                        start,
+                        forward,
+                        1.2f,
+                        0.65f,
+                        3,
+                        spacing * 0.25f
+                    );
+                    break;
+
+                case PathShape.StraightHalfCircle:
+                    rawPositions = CreateStraightHalfCircle(
+                        start,
+                        forward,
+                        1.5f,
+                        1.0f,
+                        spacing * 0.25f
+                    );
+                    break;
+
+                default:
+                    return null;
+            }
+
+            if (rawPositions == null ||
+                rawPositions.Count < 2)
+            {
+                if (logRejections)
+                    Debug.Log(
+                        $"COMPOUND {shape}: No raw path"
+                    );
+
+                continue;
+            }
+
+            // -----------------------------------------
+            // 3. Resample using actual world distance
+            // -----------------------------------------
+
+            List<Vector3> positions =
+                new List<Vector3>();
+
+            positions.Add(rawPositions[0]);
+
+            Vector3 lastPlaced = rawPositions[0];
+
+            // Find the next point exactly one domino
+            // spacing away from the previous domino.
+            for (int i = 1; i < rawPositions.Count; i++)
+            {
+                Vector3 a = rawPositions[i - 1];
+                Vector3 b = rawPositions[i];
+
+                Vector3 segment = b - a;
+                segment.y = 0f;
+
+                float segmentLength = segment.magnitude;
+
+                if (segmentLength < 0.00001f)
+                    continue;
+
+                Vector3 direction =
+                    segment / segmentLength;
+
+                float traveled = 0f;
+
+                // A single segment may contain
+                // more than one domino position.
+                while (traveled < segmentLength - 0.00001f)
+                {
+                    Vector3 remainingStart =
+                        a + direction * traveled;
+
+                    Vector3 offset =
+                        remainingStart - lastPlaced;
+
+                    offset.y = 0f;
+
+                    // Solve:
+                    // |offset + direction * t| = spacing
+                    float projection =
+                        Vector3.Dot(offset, direction);
+
+                    float c =
+                        offset.sqrMagnitude -
+                        spacing * spacing;
+
+                    float discriminant =
+                        projection * projection - c;
+
+                    if (discriminant < 0f)
+                        break;
+
+                    float root =
+                        Mathf.Sqrt(discriminant);
+
+                    float t1 = -projection - root;
+                    float t2 = -projection + root;
+
+                    float step = float.PositiveInfinity;
+
+                    if (t1 > 0.0001f)
+                        step = t1;
+
+                    if (t2 > 0.0001f && t2 < step)
+                        step = t2;
+
+                    if (float.IsInfinity(step))
+                        break;
+
+                    if (traveled + step >
+                        segmentLength + 0.00001f)
+                        break;
+
+                    traveled += step;
+
+                    Vector3 next =
+                        a + direction * traveled;
+
+                    next.y = lastPlaced.y;
+
+                    positions.Add(next);
+
+                    lastPlaced = next;
+                }
+            }
+
+            if (positions.Count < minDominoesPerLine)
+            {
+                if (logRejections)
+                    Debug.Log(
+                        $"COMPOUND {shape}: Too few dominoes " +
+                        $"{positions.Count}/{minDominoesPerLine}"
+                    );
+
+                continue;
+            }
+
+            // -----------------------------------------
+            // 4. Build candidate
+            // -----------------------------------------
+
+            CurvedPath result = new CurvedPath();
+
+            HashSet<Vector2Int> checkedCells =
+                new HashSet<Vector2Int>();
+
+            bool valid = true;
+            string rejectReason = "";
+
+            for (int i = 0; i < positions.Count; i++)
+            {
+                Vector3 position = positions[i];
+
+                // Actual center-to-center spacing.
+                if (i > 0)
+                {
+                    float distance =
+                        Vector3.Distance(
+                            positions[i - 1],
+                            position
+                        );
+
+                    if (distance < minDistance)
+                    {
+                        valid = false;
+                        rejectReason = "Domino spacing";
+                        break;
+                    }
+                }
+
+                // -------------------------------------
+                // Calculate direction
+                // -------------------------------------
+
+                Vector3 direction;
+
+                if (i < positions.Count - 1)
+                {
+                    direction =
+                        positions[i + 1] - position;
+                }
+                else
+                {
+                    direction =
+                        position - positions[i - 1];
+                }
+
+                direction.y = 0f;
+
+                if (direction.sqrMagnitude < 0.000001f)
+                {
+                    valid = false;
+                    rejectReason = "Invalid direction";
+                    break;
+                }
+
+                direction.Normalize();
+
+                // -------------------------------------
+                // Check board
+                // -------------------------------------
+
+                Vector2Int cell =
+                    board.WorldToCell(position);
+
+                if (!board.IsInside(cell))
+                {
+                    valid = false;
+                    rejectReason = "Outside board";
+                    break;
+                }
+
+                // -------------------------------------
+                // Check existing lines
+                // -------------------------------------
+
+                if (checkedCells.Add(cell))
+                {
+                    if (!IsCellClearFromOtherLines(
+                            cell,
+                            segmentGapCells))
+                    {
+                        valid = false;
+                        rejectReason = "Existing line clearance";
+                        break;
+                    }
+
+                    result.occupiedCells.Add(cell);
+                }
+
+                result.positions.Add(position);
+                result.directions.Add(direction);
+            }
+
+            if (!valid)
+            {
+                if (logRejections)
+                    Debug.Log(
+                        $"COMPOUND {shape}: {rejectReason}"
+                    );
+
+                continue;
+            }
+
+            // -----------------------------------------
+            // 5. Check internal self-overlap
+            // -----------------------------------------
+
+            for (int i = 0; i < positions.Count && valid; i++)
+            {
+                for (int j = i + 2;
+                     j < positions.Count;
+                     j++)
+                {
+                    float distance =
+                        Vector3.Distance(
+                            positions[i],
+                            positions[j]
+                        );
+
+                    if (distance < minDistance)
+                    {
+                        valid = false;
+                        rejectReason = "Self overlap";
+                        break;
+                    }
+                }
+            }
+
+            if (!valid)
+            {
+                if (logRejections)
+                    Debug.Log(
+                        $"COMPOUND {shape}: {rejectReason}"
+                    );
+
+                continue;
+            }
+
+            // -----------------------------------------
+            // 6. Successful candidate
+            // -----------------------------------------
+
+            if (logRejections)
+            {
+                Debug.Log(
+                    $"COMPOUND ACCEPTED: {shape} | " +
+                    $"Dominoes: {result.positions.Count} | " +
+                    $"Attempt: {attempt + 1}"
+                );
+            }
+
+            return result;
+        }
+
+        if (logRejections)
+        {
+            Debug.LogWarning(
+                $"COMPOUND FAILED: {shape} | " +
+                $"No valid placement after {maxAttempts} attempts"
+            );
+        }
+
+        return null;
+    }
+
     private CurvedPath TryCreateCurvedPath(
     PathShape shape)
     {
+
+        // Handle the two new shapes separately.
+        if (shape == PathShape.ZigZag ||
+            shape == PathShape.StraightHalfCircle)
+        {
+            return TryCreateCompoundPath(shape);
+        }
         // Radius is selected in grid-cell units,
         // then converted to actual world-space distance.
         int radiusCells =
@@ -1390,28 +2058,31 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
         if (shape == PathShape.Circle)
         {
-            // Circle does not duplicate first/last point.
-            dominoCount =
-                Mathf.RoundToInt(
-                    (Mathf.PI * 2f) /
-                    angleStepRadians
-                );
+            // Floor ensures that the spacing between
+            // neighboring dominoes is never smaller
+            // than the requested dominoSpacing.
 
-            dominoCount =
-                Mathf.Max(
-                    minDominoesPerLine,
-                    dominoCount
-                );
+            dominoCount = Mathf.FloorToInt(
+                (Mathf.PI * 2f) /
+                angleStepRadians
+            );
+
+            // Reject circles too small to fit the
+            // minimum number of dominoes.
+            // Do NOT force additional dominoes into them.
+
+            if (dominoCount < minDominoesPerLine)
+                return null;
         }
         else
         {
             // Arc / half-circle includes BOTH ends.
             int intervals = Mathf.Max(
-                1,
-                Mathf.RoundToInt(
-                    totalAngleRadians / angleStepRadians
-                )
-            );
+    1,
+    Mathf.FloorToInt(
+        totalAngleRadians / angleStepRadians
+    )
+);
 
             dominoCount = intervals + 1;
 
@@ -1533,6 +2204,38 @@ public class ProceduralLevelGenerator : MonoBehaviour
             minDominoesPerLine)
         {
             return null;
+        }
+        const float tolerance = 0.0001f;
+
+        for (int i = 1; i < result.positions.Count; i++)
+        {
+            float distance = Vector3.Distance(
+                result.positions[i - 1],
+                result.positions[i]
+            );
+
+            if (distance < dominoSpacing - tolerance)
+            {
+                Debug.LogWarning(
+                    $"Curved path rejected: spacing {distance:F3}, " +
+                    $"minimum {dominoSpacing:F3}"
+                );
+
+                return null;
+            }
+        }
+
+        // Full circles must also check the gap
+        // between the last and first domino.
+        if (shape == PathShape.Circle)
+        {
+            float closingDistance = Vector3.Distance(
+                result.positions[result.positions.Count - 1],
+                result.positions[0]
+            );
+
+            if (closingDistance < dominoSpacing - tolerance)
+                return null;
         }
 
         return result;
@@ -2994,7 +3697,19 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
                 // Immediate neighbors are SUPPOSED
                 // to interact with each other.
-                if (Mathf.Abs(i - j) <= 1)
+                // A falling domino is expected to interact with
+                // several following dominoes in its own chain.
+                int expectedChainNeighbors = Mathf.Max(
+                    1,
+                    Mathf.CeilToInt(fallReach / dominoSpacing) + 1
+                );
+
+                // Ignore the normal forward chain interaction.
+                // Still check nonlocal collisions and backward overlaps.
+                if (j > i && j - i <= expectedChainNeighbors)
+                    continue;
+
+                if (j == i - 1)
                     continue;
 
                 // Full circle:
@@ -3028,130 +3743,122 @@ public class ProceduralLevelGenerator : MonoBehaviour
         return true;
     }
 
+
+
     private bool ValidatePlayableFallOrder()
     {
         Physics.SyncTransforms();
 
-        HashSet<DominoLine> remaining =
+        HashSet<DominoLine> allLines =
             new HashSet<DominoLine>();
 
         foreach (DominoLine line in generatedLines)
         {
             if (line != null)
-                remaining.Add(line);
+                allLines.Add(line);
         }
 
-        int safetyCounter = 0;
+        int checkedLines = 0;
 
-        while (remaining.Count > 0)
+        foreach (DominoLine playableLine in generatedLines)
         {
-            safetyCounter++;
+            if (playableLine == null)
+                continue;
 
-            // Absolute protection against accidental infinite loops.
-            if (safetyCounter > generatedLines.Count + 5)
+            // Find every line that must fall before
+            // this line becomes playable.
+            HashSet<DominoLine> prerequisites =
+                new HashSet<DominoLine>();
+
+            if (!CollectAllPrerequisites(
+                    playableLine,
+                    prerequisites,
+                    new HashSet<DominoLine>()))
             {
                 Debug.LogWarning(
-                    "PHYSICAL VALIDATION SAFETY BREAK");
+                    $"CYCLIC BLOCKERS | {playableLine.name}");
 
                 return false;
             }
 
+            // Worst-case configuration:
+            // All prerequisites have fallen,
+            // but every other line is still standing.
+            HashSet<DominoLine> standingLines =
+                new HashSet<DominoLine>(allLines);
 
-            // =====================================================
-            // FIND CURRENTLY PLAYABLE LINES
-            // =====================================================
-
-            List<DominoLine> playableLines =
-                new List<DominoLine>();
-
-            foreach (DominoLine line in remaining)
+            foreach (DominoLine prerequisite in prerequisites)
             {
-                if (line == null)
-                    continue;
-
-                bool blocked = false;
-
-                foreach (DominoLine blocker
-                         in line.blockedByLines)
-                {
-                    if (blocker == null)
-                        continue;
-
-                    // Blocker is still standing.
-                    if (remaining.Contains(blocker))
-                    {
-                        blocked = true;
-                        break;
-                    }
-                }
-
-                if (!blocked)
-                    playableLines.Add(line);
+                standingLines.Remove(prerequisite);
             }
 
-
-            // =====================================================
-            // NO PLAYABLE LINE = DEPENDENCY DEADLOCK
-            // =====================================================
-
-            if (playableLines.Count == 0)
+            // Check ALL dominoes in this line.
+            // This works for straight and curved lines.
+            if (!CanPlayableLineFallSafely(
+                    playableLine,
+                    standingLines))
             {
                 Debug.LogWarning(
-                    $"PHYSICAL VALIDATION DEADLOCK | " +
-                    $"Remaining={remaining.Count}");
+                    $"UNSAFE PLAYABLE LINE | " +
+                    $"{playableLine.name} | " +
+                    $"Prerequisites={prerequisites.Count} | " +
+                    $"Standing={standingLines.Count - 1}");
 
                 return false;
             }
 
-
-            // =====================================================
-            // FIND ONE PLAYABLE + PHYSICALLY SAFE LINE
-            // =====================================================
-
-            DominoLine safeLine = null;
-
-            foreach (DominoLine line in playableLines)
-            {
-                if (CanPlayableLineFallSafely(
-                        line,
-                        remaining))
-                {
-                    safeLine = line;
-                    break;
-                }
-            }
-
-
-            // =====================================================
-            // PLAYABLE LINES EXIST,
-            // BUT NONE CAN PHYSICALLY FALL
-            // =====================================================
-
-            if (safeLine == null)
-            {
-                Debug.LogWarning(
-                    $"NO SAFE PLAYABLE LINE | " +
-                    $"Playable={playableLines.Count} | " +
-                    $"Remaining={remaining.Count}");
-
-                return false;
-            }
-
-
-            // =====================================================
-            // SIMULATE THIS LINE BEING COMPLETED
-            // =====================================================
-
-            remaining.Remove(safeLine);
+            checkedLines++;
         }
-
 
         Debug.Log(
-            $"PHYSICAL PLAY ORDER VALID | " +
-            $"Lines={generatedLines.Count}");
+            $"ALL PLAYABLE CHOICES VALID | " +
+            $"Lines={checkedLines}");
 
         return true;
     }
+
+
+
+    private bool CollectAllPrerequisites(
+        DominoLine line,
+        HashSet<DominoLine> result,
+        HashSet<DominoLine> visiting)
+    {
+        if (line == null)
+            return true;
+
+        // Detect dependency cycles.
+        if (!visiting.Add(line))
+            return false;
+
+        if (line.blockedByLines != null)
+        {
+            foreach (DominoLine blocker in line.blockedByLines)
+            {
+                if (blocker == null)
+                    continue;
+
+                if (visiting.Contains(blocker))
+                    return false;
+
+                if (result.Add(blocker))
+                {
+                    if (!CollectAllPrerequisites(
+                            blocker,
+                            result,
+                            visiting))
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        visiting.Remove(line);
+        return true;
+    }
+
+
 
     private bool CanPlayableLineFallSafely(
     DominoLine playableLine,
@@ -3559,5 +4266,63 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 end
             );
         }
+    }
+
+    private void OnDrawGizmos()
+    {
+        if (!drawRejectedCollision ||
+            !hasRejectedCollision)
+            return;
+
+        if (rejectedFallingDomino == null ||
+            rejectedStandingDomino == null)
+            return;
+
+        // Predicted falling collider at the rejection angle.
+        Gizmos.color = Color.cyan;
+
+        Matrix4x4 oldMatrix = Gizmos.matrix;
+
+        Gizmos.matrix = Matrix4x4.TRS(
+            rejectedSweepCenter,
+            rejectedSweepRotation,
+            Vector3.one);
+
+        Gizmos.DrawWireCube(
+            Vector3.zero,
+            rejectedSweepHalfExtents * 2f);
+
+        Gizmos.matrix = oldMatrix;
+
+        // Falling domino: yellow.
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(
+            rejectedFallingDomino.transform.position,
+            0.3f);
+
+        // Standing domino that was hit: red.
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(
+            rejectedStandingDomino.transform.position,
+            0.3f);
+
+        // Connect the two original domino positions.
+        Gizmos.color = Color.magenta;
+        Gizmos.DrawLine(
+            rejectedFallingDomino.transform.position,
+            rejectedStandingDomino.transform.position);
+
+#if UNITY_EDITOR
+        UnityEditor.Handles.Label(
+            rejectedFallingDomino.transform.position +
+            Vector3.up * 1.2f,
+            $"FALLING | {rejectedFallingDomino.name}\n" +
+            $"Angle: {rejectedFallAngle:F1}");
+
+        UnityEditor.Handles.Label(
+            rejectedStandingDomino.transform.position +
+            Vector3.up * 1.2f,
+            $"COLLISION | {rejectedStandingDomino.name}");
+#endif
     }
 }
