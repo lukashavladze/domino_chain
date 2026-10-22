@@ -48,6 +48,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
     [SerializeField]
     private int levelsToMaximumDifficulty = 500;
 
+
     [Header("Calculated Difficulty Targets")]
 
     [SerializeField]
@@ -1896,11 +1897,11 @@ public class ProceduralLevelGenerator : MonoBehaviour
         // =================================================
         minBlockersPerLine = 1;
 
-        if (level <= 200)
+        if (level <= 50)
             maxBlockersPerLine = 1;
-        else if (level <= 500)
+        else if (level <= 100)
             maxBlockersPerLine = 2;
-        else if (level <= 800)
+        else if (level <= 200)
             maxBlockersPerLine = 3;
         else
             maxBlockersPerLine = 4;
@@ -1930,7 +1931,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
         // =================================================
         // CURVED SHAPE CHANCE
         // =================================================
-        if (level <= 50)
+        if (level <= 10)
         {
             curvedLineChance = 0f;
         }
@@ -1968,11 +1969,11 @@ public class ProceduralLevelGenerator : MonoBehaviour
             maximumActualDependencyDepth = 22;
 
         // Actual blockers per line.
-        if (level <= 200)
+        if (level <= 10)
             maximumActualBlockersPerLine = 1;
-        else if (level <= 500)
+        else if (level <= 20)
             maximumActualBlockersPerLine = 2;
-        else if (level <= 800)
+        else if (level <= 30)
             maximumActualBlockersPerLine = 3;
         else
             maximumActualBlockersPerLine = 4;
