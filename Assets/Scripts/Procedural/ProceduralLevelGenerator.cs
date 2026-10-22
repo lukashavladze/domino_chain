@@ -1808,49 +1808,119 @@ public class ProceduralLevelGenerator : MonoBehaviour
         return true;
     }
 
+
     private void UpdateDifficultySettings()
     {
         if (!useAutomaticDifficultySettings)
             return;
 
-        if (autoDifficultyFromLevel)
-        {
-            float progress = Mathf.Clamp01(
-                (levelNumber - 1f) /
-                Mathf.Max(1, levelsToMaximumDifficulty - 1));
+        int level = Mathf.Max(1, levelNumber);
 
-            difficulty = Mathf.RoundToInt(progress * 100f);
-        }
+        // Difficulty grows smoothly from level 1 to 1000.
+        float t = Mathf.Clamp01(
+            (level - 1f) /
+            Mathf.Max(1, levelsToMaximumDifficulty - 1)
+        );
 
-        float t = difficulty / 100f;
+        difficulty = Mathf.RoundToInt(t * 100f);
 
-        targetStarterLines =
-            Mathf.RoundToInt(Mathf.Lerp(5f, 2f, t));
+        // =================================================
+        // STARTING LINES: 6 -> 2
+        // =================================================
+        targetStarterLines = Mathf.Clamp(
+            Mathf.RoundToInt(Mathf.Lerp(6f, 2f, t)),
+            2, 6
+        );
 
         minInitialPlayableLines = targetStarterLines;
         maxInitialPlayableLines = targetStarterLines;
 
-        blockerChance = Mathf.Lerp(0.15f, 0.85f, t);
-
-        minBlockersPerLine = 1;
-        maxBlockersPerLine =
-            Mathf.RoundToInt(Mathf.Lerp(1f, 5f, t));
-
-        targetDependencyDepth =
-            Mathf.RoundToInt(Mathf.Lerp(2f, 12f, t));
-
-        targetAverageUnlocks =
-            Mathf.Lerp(2.0f, 1.1f, t);
-
-        curvedLineChance =
-            Mathf.Lerp(0.20f, 0.70f, t);
-
+        // =================================================
+        // LINE LENGTH: LONG -> SHORT
+        // =================================================
         minDominoesPerLine =
-            Mathf.RoundToInt(Mathf.Lerp(6f, 12f, t));
+            Mathf.RoundToInt(Mathf.Lerp(20f, 4f, t));
 
         maxDominoesPerLine =
-            Mathf.RoundToInt(Mathf.Lerp(12f, 28f, t));
+            Mathf.RoundToInt(Mathf.Lerp(40f, 12f, t));
+
+        maxDominoesPerLine = Mathf.Max(
+            minDominoesPerLine,
+            maxDominoesPerLine
+        );
+
+        // =================================================
+        // BOARD COVERAGE
+        // Keep first 100 levels similar.
+        // =================================================
+        if (level <= 100)
+        {
+            targetBoardFill = 0.15f;
+        }
+        else
+        {
+            float fillT = Mathf.Clamp01(
+                (level - 101f) / 899f
+            );
+
+            targetBoardFill =
+                Mathf.Lerp(0.15f, 0.30f, fillT);
+        }
+
+        // =================================================
+        // BLOCKER COMPLEXITY
+        // =================================================
+        minBlockersPerLine = 1;
+
+        if (level <= 200)
+            maxBlockersPerLine = 1;
+        else if (level <= 500)
+            maxBlockersPerLine = 2;
+        else if (level <= 800)
+            maxBlockersPerLine = 3;
+        else
+            maxBlockersPerLine = 4;
+
+        targetAverageBlockers =
+            Mathf.Lerp(1f, 2.2f, t);
+
+        // Blocker ratio is informational in the current
+        // BlockerAware generator, not a guaranteed result.
+        blockerChance = Mathf.Lerp(0.35f, 0.90f, t);
+
+        // =================================================
+        // DEPENDENCY DIFFICULTY
+        // =================================================
+        targetDependencyDepth =
+            Mathf.RoundToInt(Mathf.Lerp(3f, 20f, t));
+
+        targetAverageUnlocks =
+            Mathf.Lerp(2.5f, 1.2f, t);
+
+        // Do not reject complete puzzles for missing
+        // targets until placement can control these.
+        enforceDependencyTargets = false;
+        enforceAverageBlockers = false;
+        enforcePuzzleStructure = false;
+
+        // =================================================
+        // CURVED SHAPE CHANCE
+        // =================================================
+        if (level <= 50)
+        {
+            curvedLineChance = 0f;
+        }
+        else
+        {
+            float curveT = Mathf.Clamp01(
+                (level - 51f) / 949f
+            );
+
+            curvedLineChance =
+                Mathf.Lerp(0.10f, 0.70f, curveT);
+        }
     }
+
 
 
 
@@ -1969,42 +2039,39 @@ public class ProceduralLevelGenerator : MonoBehaviour
     // GROUND SIZE
     // =========================================================
 
+
     public Vector2 CalculateGroundSize()
     {
-        int step =
-            (levelNumber - 1) /
-            levelsPerSizeIncrease;
+        int level = Mathf.Max(1, levelNumber);
 
+        // First 200 levels use the starting size.
+        if (level <= 200)
+            return startingGroundSize;
+
+        // Increase every 100 levels after level 200.
+        int step = 1 + (level - 201) / 100;
 
         float width =
             startingGroundSize.x +
             step * sizeIncreasePerStep.x;
 
-
         float depth =
             startingGroundSize.y +
             step * sizeIncreasePerStep.y;
 
-
-        width =
-            Mathf.Min(
-                width,
-                maximumGroundSize.x
-            );
-
-
-        depth =
-            Mathf.Min(
-                depth,
-                maximumGroundSize.y
-            );
-
-
-        return new Vector2(
+        width = Mathf.Min(
             width,
-            depth
+            maximumGroundSize.x
         );
+
+        depth = Mathf.Min(
+            depth,
+            maximumGroundSize.y
+        );
+
+        return new Vector2(width, depth);
     }
+
 
 
     // =========================================================
@@ -2878,27 +2945,36 @@ public class ProceduralLevelGenerator : MonoBehaviour
     }
 
 
+
     private PathShape GetRandomPathShape()
     {
         List<PathShape> available =
             new List<PathShape>();
 
-        if (allowArcLines)
+        int level = Mathf.Max(1, levelNumber);
+
+        // Level 10: Arc
+        if (level >= 10 && allowArcLines)
             available.Add(PathShape.Arc);
 
-        if (allowHalfCircleLines)
+        // Level 20: Half Circle
+        if (level >= 20 && allowHalfCircleLines)
             available.Add(PathShape.HalfCircle);
 
-        if (allowCircleLines)
+        // Level 30: Circle
+        if (level >= 30 && allowCircleLines)
             available.Add(PathShape.Circle);
 
-        if (allowSCurveLines)
+        // Level 40: S Curve
+        if (level >= 40 && allowSCurveLines)
             available.Add(PathShape.SCurve);
 
-        if (allowUShapeLines)
+        // Level 50: U Shape
+        if (level >= 50 && allowUShapeLines)
             available.Add(PathShape.UShape);
 
-        if (allowStraightHalfCircleLines)
+        // Level 60: Straight + Half Circle
+        if (level >= 60 && allowStraightHalfCircleLines)
             available.Add(PathShape.StraightHalfCircle);
 
         if (available.Count == 0)
@@ -2908,6 +2984,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
             Random.Range(0, available.Count)
         ];
     }
+
 
     private class CurvedPath
     {
