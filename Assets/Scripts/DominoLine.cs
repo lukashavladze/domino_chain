@@ -93,10 +93,10 @@ public class DominoLine : MonoBehaviour
 
         RefreshAvailability();
 
-        Debug.Log(
-            "Auto Connected " +
-            dominoes.Count +
-            " dominoes.");
+        //Debug.Log(
+        //    "Auto Connected " +
+        //    dominoes.Count +
+        //    " dominoes.");
     }
 
     public bool IsProcedurallyBlocked()
