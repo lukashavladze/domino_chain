@@ -59,6 +59,30 @@ public class ProceduralLevelGenerator : MonoBehaviour
     public int Difficulty => difficulty;
 
 
+    [Header("Actual Dependency Limits")]
+
+    [SerializeField]
+    private bool enforceActualDependencyDepth = true;
+
+    [SerializeField, Min(1)]
+    private int maximumActualDependencyDepth = 3;
+
+    [SerializeField]
+    private bool enforceActualBlockerLimit = true;
+
+    [SerializeField, Range(1, 5)]
+    private int maximumActualBlockersPerLine = 1;
+
+    [Header("Dependency Limit Diagnostics")]
+
+    [SerializeField]
+    private bool logDependencyLimitRejections = false;
+
+    private int rejectedDepthLimit;
+    private int rejectedActualBlockerLimit;
+
+
+
     [Header("Dependency Difficulty Targets")]
 
     [SerializeField, Min(0)]
@@ -1919,8 +1943,112 @@ public class ProceduralLevelGenerator : MonoBehaviour
             curvedLineChance =
                 Mathf.Lerp(0.10f, 0.70f, curveT);
         }
+
+        // =================================================
+        // ACTUAL DEPENDENCY LIMITS
+        // =================================================
+
+        enforceActualDependencyDepth = true;
+        enforceActualBlockerLimit = true;
+
+        // Increase permitted depth progressively.
+        if (level <= 20)
+            maximumActualDependencyDepth = 3;
+        else if (level <= 50)
+            maximumActualDependencyDepth = 4;
+        else if (level <= 100)
+            maximumActualDependencyDepth = 5;
+        else if (level <= 200)
+            maximumActualDependencyDepth = 7;
+        else if (level <= 400)
+            maximumActualDependencyDepth = 10;
+        else if (level <= 700)
+            maximumActualDependencyDepth = 15;
+        else
+            maximumActualDependencyDepth = 22;
+
+        // Actual blockers per line.
+        if (level <= 200)
+            maximumActualBlockersPerLine = 1;
+        else if (level <= 500)
+            maximumActualBlockersPerLine = 2;
+        else if (level <= 800)
+            maximumActualBlockersPerLine = 3;
+        else
+            maximumActualBlockersPerLine = 4;
+
     }
 
+
+    private bool ValidateActualDependencyLimits()
+    {
+        if (enforceActualBlockerLimit)
+        {
+            foreach (DominoLine line in generatedLines)
+            {
+                if (line == null)
+                    continue;
+
+                HashSet<DominoLine> uniqueBlockers =
+                    new HashSet<DominoLine>();
+
+                if (line.blockedByLines != null)
+                {
+                    foreach (DominoLine blocker
+                             in line.blockedByLines)
+                    {
+                        if (blocker != null &&
+                            blocker != line &&
+                            generatedLines.Contains(blocker))
+                        {
+                            uniqueBlockers.Add(blocker);
+                        }
+                    }
+                }
+
+                if (uniqueBlockers.Count >
+                    maximumActualBlockersPerLine)
+                {
+                    rejectedActualBlockerLimit++;
+
+                    if (logDependencyLimitRejections)
+                    {
+                        Debug.Log(
+                            $"ACTUAL BLOCKER LIMIT REJECT | " +
+                            $"Line={line.name} | " +
+                            $"Actual={uniqueBlockers.Count} | " +
+                            $"Maximum={maximumActualBlockersPerLine}");
+                    }
+
+                    return false;
+                }
+            }
+        }
+
+        if (enforceActualDependencyDepth)
+        {
+            PuzzleDifficultyAnalyzer.Result metrics =
+                PuzzleDifficultyAnalyzer.Analyze(generatedLines);
+
+            if (metrics.maxDepth >
+                maximumActualDependencyDepth)
+            {
+                rejectedDepthLimit++;
+
+                if (logDependencyLimitRejections)
+                {
+                    Debug.Log(
+                        $"DEPENDENCY DEPTH REJECT | " +
+                        $"Actual={metrics.maxDepth} | " +
+                        $"Maximum={maximumActualDependencyDepth}");
+                }
+
+                return false;
+            }
+        }
+
+        return true;
+    }
 
 
 
@@ -2202,6 +2330,9 @@ public class ProceduralLevelGenerator : MonoBehaviour
         rejectedBlockerCount = 0;
         acceptedGuidedCurves = 0;
         acceptedGuidedStraights = 0;
+        rejectedDepthLimit = 0;
+        rejectedActualBlockerLimit = 0;
+
 
         int lineIndex = 0;
 
@@ -2527,6 +2658,16 @@ public class ProceduralLevelGenerator : MonoBehaviour
             $"Curved={acceptedCurved} | " +
             $"Straight={acceptedStraight} | " +
             $"Total={totalAccepted}");
+
+
+
+        Debug.Log(
+            $"DEPENDENCY LIMIT DIAGNOSTICS | " +
+            $"RejectedDepth={rejectedDepthLimit} | " +
+            $"RejectedActualBlockers={rejectedActualBlockerLimit} | " +
+            $"MaxAllowedDepth={maximumActualDependencyDepth} | " +
+            $"MaxAllowedBlockers={maximumActualBlockersPerLine}");
+
     }
 
 
@@ -2785,8 +2926,15 @@ public class ProceduralLevelGenerator : MonoBehaviour
                     actualBlockers <= maxBlockersPerLine;
             }
         }
+        bool dependencyLimitsValid = true;
 
         if (physicallyValid && structureValid && blockerValid)
+        {
+            dependencyLimitsValid =
+                ValidateActualDependencyLimits();
+        }
+
+        if (physicallyValid && structureValid && blockerValid && dependencyLimitsValid)
         {
             if (logGuidedPlacement && requireRealBlocker)
             {
@@ -2818,6 +2966,10 @@ public class ProceduralLevelGenerator : MonoBehaviour
         else if (!blockerValid)
         {
             rejectedBlockerCount++;
+        }
+        else if (!dependencyLimitsValid)
+        {
+            // Already counted by ValidateActualDependencyLimits().
         }
 
         // Reject only this candidate.
