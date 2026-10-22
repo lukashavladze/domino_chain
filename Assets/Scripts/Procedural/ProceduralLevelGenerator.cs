@@ -40,6 +40,10 @@ public class ProceduralLevelGenerator : MonoBehaviour
     [SerializeField]
     private bool autoDifficultyFromLevel = true;
 
+    [Header("Difficulty Control")]
+    [SerializeField]
+    private bool useAutomaticDifficultySettings = false;
+
     [Min(1)]
     [SerializeField]
     private int levelsToMaximumDifficulty = 500;
@@ -54,7 +58,48 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
     public int Difficulty => difficulty;
 
-    
+
+    [Header("Dependency Difficulty Targets")]
+
+    [SerializeField, Min(0)]
+    private int dependencyDepthTolerance = 1;
+
+    [SerializeField, Min(0f)]
+    private float averageUnlocksTolerance = 0.25f;
+
+    [SerializeField]
+    private bool enforceDependencyTargets = false;
+
+
+    [Header("Average Blocker Difficulty")]
+
+    [SerializeField, Range(1f, 5f)]
+    private float targetAverageBlockers = 1.8f;
+
+    [SerializeField, Range(0f, 1f)]
+    private float averageBlockersTolerance = 0.3f;
+
+    [SerializeField]
+    private bool enforceAverageBlockers = false;
+
+    [SerializeField]
+    private bool relaxBlockerRequirements = true;
+
+
+
+
+    [Header("Free Space Aware Generation")]
+    [SerializeField]
+    private bool useFreeSpaceTargeting = false;
+
+    [SerializeField, Range(2, 32)]
+    private int freeSpaceTargetSamples = 12;
+
+    [SerializeField, Range(2, 12)]
+    private int freeSpaceSearchRadius = 6;
+
+
+
 
 
     // =========================================================
@@ -218,6 +263,16 @@ public class ProceduralLevelGenerator : MonoBehaviour
     // PUZZLE GENERATION
     // =========================================================
 
+    [Header("Path Coverage Optimization")]
+    [SerializeField, Range(1, 32)]
+    private int maxRankedCurvedCandidates = 12;
+
+    [SerializeField, Range(0f, 5f)]
+    private float emptyRegionWeight = 1.5f;
+
+    [SerializeField, Range(0f, 3f)]
+    private float newCellWeight = 2f;
+
     private enum PuzzleGenerationMode
     {
         Random,
@@ -296,6 +351,16 @@ public class ProceduralLevelGenerator : MonoBehaviour
     [Min(1)]
     [SerializeField]
     private int rowSpacing = 2;
+
+    [Header("Generation Diagnostics")]
+    [SerializeField]
+    private bool logGenerationDiagnostics = true;
+
+    private int rejectedPhysical;
+    private int rejectedStarterCount;
+    private int rejectedBlockerCount;
+    private int acceptedGuidedCurves;
+    private int acceptedGuidedStraights;
 
     [Header("Direction Generation")]
 
@@ -687,6 +752,27 @@ public class ProceduralLevelGenerator : MonoBehaviour
             PuzzleDifficultyAnalyzer.Result metrics =
                 PuzzleDifficultyAnalyzer.Analyze(generatedLines);
 
+
+            Debug.Log(
+                $"PUZZLE DIFFICULTY ANALYSIS | " +
+                $"Lines={metrics.totalLines} | " +
+                $"Starters={metrics.initialPlayable} | " +
+                $"Blocked={metrics.blockedLines} | " +
+                $"TotalBlockerLinks={metrics.blockerLinks} | " +
+                $"AverageBlockers={metrics.averageBlockersPerBlockedLine:F2} | " +
+                $"MaxBlockers={metrics.maximumBlockersOnLine} | " +
+                $"MultiBlocked={metrics.multiBlockedLines} | " +
+                $"MaxDepth={metrics.maxDepth} | " +
+                $"MaxPrerequisiteSteps={metrics.maximumPrerequisiteSteps} | " +
+                $"AveragePrerequisiteSteps={metrics.averagePrerequisiteSteps:F2} | " +
+                $"AverageUnlocksProductive={metrics.averageUnlocks:F2} | " +
+                $"AverageUnlocksAllMoves={metrics.averageUnlocksAllMoves:F2} | " +
+                $"MaxUnlocksOneMove={metrics.maximumUnlocksFromOneMove} | " +
+                $"ProductiveMoves={metrics.productiveMoves} | " +
+                $"Solvable={metrics.solvable}"
+            );
+
+
             // Check solvability.
             if (!metrics.solvable)
                 continue;
@@ -742,6 +828,135 @@ public class ProceduralLevelGenerator : MonoBehaviour
             $"FAILED to generate solvable Level {levelNumber} " +
             $"after {maxGenerationAttempts} attempts.");
     }
+
+
+
+
+
+    private float ScoreCandidatePathCoverage(
+        IEnumerable<Vector2Int> pathCells,
+        HashSet<Vector2Int> occupiedBefore)
+    {
+        if (pathCells == null)
+            return float.MinValue;
+
+        float score = 0f;
+
+        HashSet<Vector2Int> uniqueCells =
+            new HashSet<Vector2Int>();
+
+        foreach (Vector2Int cell in pathCells)
+        {
+            if (!board.IsInside(cell))
+                return float.MinValue;
+
+            if (!uniqueCells.Add(cell))
+                continue;
+
+            if (occupiedBefore.Contains(cell))
+                return float.MinValue;
+
+            // Reward actual new coverage.
+            score += newCellWeight;
+
+            // Reward cells surrounded by unused board space.
+            float freeSpace =
+                ScoreFreeSpaceAround(
+                    board.CellToWorld(cell));
+
+            score += freeSpace * emptyRegionWeight;
+        }
+
+        return score;
+    }
+
+
+
+    private float ScoreFreeSpaceAround(Vector3 worldPosition)
+    {
+        Vector2Int center = board.WorldToCell(worldPosition);
+
+        float score = 0f;
+
+        for (int x = -freeSpaceSearchRadius;
+             x <= freeSpaceSearchRadius;
+             x++)
+        {
+            for (int y = -freeSpaceSearchRadius;
+                 y <= freeSpaceSearchRadius;
+                 y++)
+            {
+                Vector2Int cell = new Vector2Int(
+                    center.x + x,
+                    center.y + y);
+
+                if (!board.IsInside(cell))
+                    continue;
+
+                if (!IsCellClearFromOtherLines(
+                        cell,
+                        segmentGapCells))
+                    continue;
+
+                float distance = Mathf.Sqrt(x * x + y * y);
+
+                float weight = 1f -
+                    distance / (freeSpaceSearchRadius * 1.5f);
+
+                score += Mathf.Max(0.1f, weight);
+            }
+        }
+
+        return score;
+    }
+
+    private bool TrySelectFreeSpaceBlocker(
+        out DominoLine selectedLine,
+        out Domino selectedDomino)
+    {
+        selectedLine = null;
+        selectedDomino = null;
+
+        if (generatedLines.Count == 0)
+            return false;
+
+        float bestScore = float.NegativeInfinity;
+
+        int samples = useFreeSpaceTargeting
+            ? freeSpaceTargetSamples
+            : 1;
+
+        for (int i = 0; i < samples; i++)
+        {
+            DominoLine line = generatedLines[
+                Random.Range(0, generatedLines.Count)];
+
+            if (line == null ||
+                line.dominoes == null ||
+                line.dominoes.Count == 0)
+                continue;
+
+            Domino domino = line.dominoes[
+                Random.Range(0, line.dominoes.Count)];
+
+            if (domino == null)
+                continue;
+
+            float score = useFreeSpaceTargeting
+                ? ScoreFreeSpaceAround(domino.transform.position)
+                : 0f;
+
+            if (selectedDomino == null || score > bestScore)
+            {
+                bestScore = score;
+                selectedLine = line;
+                selectedDomino = domino;
+            }
+        }
+
+        return selectedDomino != null;
+    }
+
 
 
     private bool DoesPlayableDominoHitStandingLine(
@@ -1109,23 +1324,12 @@ public class ProceduralLevelGenerator : MonoBehaviour
              !GenerationTimeExpired();
              attempt++)
         {
-            DominoLine blockerLine =
-                generatedLines[
-                    Random.Range(0, generatedLines.Count)];
-
-            if (blockerLine == null ||
-                blockerLine.dominoes == null ||
-                blockerLine.dominoes.Count == 0)
+            if (!TrySelectFreeSpaceBlocker(
+        out DominoLine blockerLine,
+        out Domino targetDomino))
             {
                 continue;
             }
-
-            Domino targetDomino =
-                blockerLine.dominoes[
-                    Random.Range(0, blockerLine.dominoes.Count)];
-
-            if (targetDomino == null)
-                continue;
 
             LineDirection direction =
                 GetRandomLineDirection();
@@ -1169,8 +1373,20 @@ public class ProceduralLevelGenerator : MonoBehaviour
             if (!IsCandidateEndSafe(path))
                 continue;
 
+         
+            float existingScore =
+    ScoreGuidedStraightCoverage(path, occupied);
+            if (existingScore == float.MinValue)
+                continue;
+
+            float coverageScore =
+                ScoreCandidatePathCoverage(path, occupied);
+
+            if (coverageScore == float.MinValue)
+                continue;
+
             float score =
-                ScoreGuidedStraightCoverage(path, occupied);
+                existingScore + coverageScore;
 
             if (score == float.MinValue)
                 continue;
@@ -1384,41 +1600,63 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
 
 
+
+
     private bool MatchesDifficulty(
         PuzzleDifficultyAnalyzer.Result metrics)
     {
-        if (!metrics.solvable)
+        if (!metrics.solvable || metrics.totalLines < 2)
             return false;
 
-        if (metrics.totalLines < 2)
-            return false;
-
-        // Start with reasonable tolerances.
-        int starterTolerance = 1;
+        int starterTolerance =
+            generationMode == PuzzleGenerationMode.BlockerAware
+                ? 0
+                : 1;
 
         if (Mathf.Abs(
-            metrics.initialPlayable - targetStarterLines)
+                metrics.initialPlayable - targetStarterLines)
             > starterTolerance)
-        {
             return false;
-        }
 
         float actualBlockerRatio =
-            (float)metrics.blockedLines /
-            metrics.totalLines;
+            (float)metrics.blockedLines / metrics.totalLines;
 
-        // Gradually require more blocked lines.
         float minimumBlockerRatio =
             Mathf.Max(0f, blockerChance - 0.20f);
 
         if (actualBlockerRatio < minimumBlockerRatio)
             return false;
 
-        // Don't require exact depth yet.
-        // Guided generation must be improved first.
+        if (enforceDependencyTargets)
+        {
+            if (Mathf.Abs(
+                    metrics.maxDepth - targetDependencyDepth)
+                > dependencyDepthTolerance)
+                return false;
+
+            if (Mathf.Abs(
+                    metrics.averageUnlocks - targetAverageUnlocks)
+                > averageUnlocksTolerance)
+                return false;
+        }
+
+        if (enforceAverageBlockers &&
+            metrics.blockedLines > 0)
+        {
+            if (Mathf.Abs(
+                    metrics.averageBlockersPerBlockedLine -
+                    targetAverageBlockers) >
+                averageBlockersTolerance)
+            {
+                return false;
+            }
+        }
+
 
         return true;
     }
+
+
 
 
 
@@ -1572,6 +1810,9 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
     private void UpdateDifficultySettings()
     {
+        if (!useAutomaticDifficultySettings)
+            return;
+
         if (autoDifficultyFromLevel)
         {
             float progress = Mathf.Clamp01(
@@ -1583,71 +1824,84 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
         float t = difficulty / 100f;
 
-        // Starter count decreases with difficulty.
-        targetStarterLines = Mathf.RoundToInt(
-            Mathf.Lerp(5f, 2f, t));
+        targetStarterLines =
+            Mathf.RoundToInt(Mathf.Lerp(5f, 2f, t));
 
-        // Existing structure validation settings.
         minInitialPlayableLines = targetStarterLines;
         maxInitialPlayableLines = targetStarterLines;
 
         blockerChance = Mathf.Lerp(0.15f, 0.85f, t);
 
         minBlockersPerLine = 1;
-
         maxBlockersPerLine =
-    difficulty <= 20 ? 1 :
-    difficulty <= 40 ? 2 :
-    difficulty <= 60 ? 3 :
-    difficulty <= 80 ? 4 : 5;
+            Mathf.RoundToInt(Mathf.Lerp(1f, 5f, t));
 
         targetDependencyDepth =
-            Mathf.RoundToInt(Mathf.Lerp(2f, 9f, t));
+            Mathf.RoundToInt(Mathf.Lerp(2f, 12f, t));
 
         targetAverageUnlocks =
-    Mathf.Lerp(0.85f, 0.45f, t);
+            Mathf.Lerp(2.0f, 1.1f, t);
+
+        curvedLineChance =
+            Mathf.Lerp(0.20f, 0.70f, t);
+
+        minDominoesPerLine =
+            Mathf.RoundToInt(Mathf.Lerp(6f, 12f, t));
+
+        maxDominoesPerLine =
+            Mathf.RoundToInt(Mathf.Lerp(12f, 28f, t));
     }
+
+
 
 
     private int GetRequiredBlockersForAttempt(
         int requestedBlockers,
         int attempt)
     {
-        float progress =
-            (float)attempt /
-            Mathf.Max(1, guidedBlockerAttempts - 1);
+        int min = Mathf.Clamp(minBlockersPerLine, 1, 5);
+        int max = Mathf.Clamp(maxBlockersPerLine, min, 5);
 
-        if (progress >= 0.80f)
-            return 1;
+        int requested = Mathf.Clamp(
+            requestedBlockers, min, max);
 
-        if (progress >= 0.60f)
-            return Mathf.Max(1, requestedBlockers - 1);
+        if (!relaxBlockerRequirements)
+            return requested;
 
-        return requestedBlockers;
+        float progress = attempt /
+            (float)Mathf.Max(1, guidedBlockerAttempts - 1);
+
+        if (progress >= 0.35f)
+            return min;
+
+        if (progress >= 0.15f)
+            return Mathf.Max(min, requested - 1);
+
+        return requested;
     }
-
-
 
     private int ChooseTargetBlockerCount()
     {
-        int max = Mathf.Clamp(maxBlockersPerLine, 1, 5);
+        int min = Mathf.Clamp(minBlockersPerLine, 1, 5);
+        int max = Mathf.Clamp(maxBlockersPerLine, min, 5);
 
+        if (min == max)
+            return min;
+
+        // Prefer feasible blocker counts.
+        // Higher difficulty can increase this later.
         float roll = Random.value;
 
-        if (max >= 5 && roll < 0.03f)
-            return 5;
+        if (max >= 3 && roll < 0.10f)
+            return Mathf.Max(min, 3);
 
-        if (max >= 4 && roll < 0.10f)
-            return 4;
+        if (max >= 2 && roll < 0.35f)
+            return Mathf.Max(min, 2);
 
-        if (max >= 3 && roll < 0.25f)
-            return 3;
-
-        if (max >= 2 && roll < 0.50f)
-            return 2;
-
-        return 1;
+        return min;
     }
+
+
 
 
     private Vector3 GetActualDominoFallDirection(
@@ -1873,18 +2127,23 @@ public class ProceduralLevelGenerator : MonoBehaviour
     // GENERATE BOARD COVERAGE
     // =========================================================
 
+
     private void GenerateSegmentedCoverage()
     {
+        rejectedPhysical = 0;
+        rejectedStarterCount = 0;
+        rejectedBlockerCount = 0;
+        acceptedGuidedCurves = 0;
+        acceptedGuidedStraights = 0;
+
         int lineIndex = 0;
 
-        int totalCells =
-            board.Width * board.Height;
+        int totalCells = board.Width * board.Height;
 
         int targetOccupiedCells =
-            Mathf.RoundToInt(
-                totalCells * targetBoardFill);
+            Mathf.RoundToInt(totalCells * targetBoardFill);
 
-        int occupiedCells = 0;
+        int occupiedCells = board.GetOccupiedCells().Count;
 
         int attempts = 0;
 
@@ -1895,12 +2154,71 @@ public class ProceduralLevelGenerator : MonoBehaviour
                     blockerAwareCandidateLimit)
                 : maxLineGenerationAttempts;
 
+        bool curvedShapesEnabled =
+            allowArcLines ||
+            allowHalfCircleLines ||
+            allowCircleLines ||
+            allowSCurveLines ||
+            allowUShapeLines ||
+            allowStraightHalfCircleLines;
+
+        float targetCurvedRatio =
+            curvedShapesEnabled
+                ? Mathf.Clamp01(curvedLineChance)
+                : 0f;
+
+        // Count accepted lines, not attempted shapes.
+        int acceptedCurved = 0;
+        int acceptedStraight = 0;
+
+        foreach (DominoLine existing in generatedLines)
+        {
+            if (existing == null)
+                continue;
+
+            if (existing.name.StartsWith("Generated_Curve_"))
+                acceptedCurved++;
+            else
+                acceptedStraight++;
+        }
+
+        // Avoid endlessly attempting curves when placement is difficult.
+        const int curvedFailureFallbackThreshold = 4;
+        int consecutiveCurvedFailures = 0;
+
         while (
             occupiedCells < targetOccupiedCells &&
             attempts < candidateLimit &&
             !GenerationTimeExpired())
         {
             attempts++;
+
+            int acceptedTotal =
+                acceptedCurved + acceptedStraight;
+
+            // Compare the number of curved lines against
+            // the desired number after the NEXT acceptance.
+            float curvedDeficit =
+                targetCurvedRatio * (acceptedTotal + 1)
+                - acceptedCurved;
+
+            bool preferCurved =
+                curvedShapesEnabled &&
+                targetCurvedRatio > 0f &&
+                (
+                    curvedDeficit >= 0.5f ||
+                    (
+                        curvedDeficit > 0f &&
+                        Random.value < curvedDeficit
+                    )
+                );
+
+            // Every few failed curved attempts, allow one
+            // straight attempt to keep generation progressing.
+            bool allowStraightFallback =
+                !preferCurved ||
+                consecutiveCurvedFailures >=
+                    curvedFailureFallbackThreshold;
 
             // =====================================================
             // BLOCKER-AWARE GUIDED GENERATION
@@ -1910,160 +2228,137 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 CountInitiallyPlayableLines() >= targetStarterLines)
             {
                 bool guidedAccepted = false;
-
-                bool preferCurved =
-                    Random.value < curvedLineChance &&
-                    (allowArcLines ||
-                     allowHalfCircleLines ||
-                     allowCircleLines ||
-                     allowSCurveLines ||
-                     allowUShapeLines ||
-                     allowStraightHalfCircleLines);
-
+                bool acceptedWasCurved = false;
 
                 if (preferCurved)
                 {
                     guidedAccepted =
-                        TryGenerateGuidedCurvedBlockedLine(lineIndex);
+                        TryGenerateGuidedCurvedBlockedLine(
+                            lineIndex);
 
-                    // If curved placement fails, try straight placement
-                    // before consuming another outer generation attempt.
-                    if (!guidedAccepted && !GenerationTimeExpired())
+                    if (guidedAccepted)
+                    {
+                        acceptedWasCurved = true;
+                    }
+                    else
+                    {
+                        consecutiveCurvedFailures++;
+                    }
+
+                    if (!guidedAccepted &&
+                        allowStraightFallback &&
+                        !GenerationTimeExpired())
                     {
                         guidedAccepted =
-                            TryGenerateGuidedBlockedLine(lineIndex);
+                            TryGenerateGuidedBlockedLine(
+                                lineIndex);
                     }
                 }
                 else
                 {
                     guidedAccepted =
-                        TryGenerateGuidedBlockedLine(lineIndex);
-
-                    // Occasionally try curved placement if straight fails.
-                    if (!guidedAccepted &&
-                        !GenerationTimeExpired() &&
-                        Random.value < curvedLineChance)
-                    {
-                        guidedAccepted =
-                            TryGenerateGuidedCurvedBlockedLine(lineIndex);
-                    }
+                        TryGenerateGuidedBlockedLine(
+                            lineIndex);
                 }
-
 
                 if (guidedAccepted)
                 {
+                    if (acceptedWasCurved)
+                    {
+                        acceptedCurved++;
+                        consecutiveCurvedFailures = 0;
+                    }
+                    else
+                    {
+                        acceptedStraight++;
+
+                        // After a straight fallback, retry
+                        // curved placement on the next attempt.
+                        if (preferCurved)
+                            consecutiveCurvedFailures = 0;
+                    }
+
                     lineIndex++;
 
-                    // Curved lines may reserve additional cells,
-                    // so use actual board occupancy.
-                    occupiedCells = board.GetOccupiedCells().Count;
-
-                    continue;
+                    occupiedCells =
+                        board.GetOccupiedCells().Count;
                 }
 
-                // Don't fall back to random unblocked lines.
-                // They would exceed our starter limit.
+                // Never fall back to an unblocked random line
+                // after reaching the starter limit.
                 continue;
             }
 
+            // =====================================================
+            // INITIAL GENERATION: CURVED PATH
+            // =====================================================
 
-            // =============================================
-            // TRY CURVED LINE
-            // =============================================
-            bool tryCurved =
-    Random.value < curvedLineChance &&
-    (
-        allowArcLines ||
-        allowHalfCircleLines ||
-        allowCircleLines ||
-        allowSCurveLines ||
-        allowUShapeLines ||
-        allowStraightHalfCircleLines
-    );
-
-            if (tryCurved)
+            if (preferCurved)
             {
                 PathShape shape =
                     GetRandomPathShape();
 
                 CurvedPath curvedPath =
-     TryCreateCurvedPath(shape);
+                    TryCreateCurvedPath(shape);
 
-                if (curvedPath == null ||
-                    curvedPath.positions.Count < 2)
+                bool curvedAccepted = false;
+
+                if (curvedPath != null &&
+                    curvedPath.positions != null &&
+                    curvedPath.positions.Count >= 2 &&
+                    IsCurvedCandidateEndSafe(curvedPath) &&
+                    HasEnoughCurvedPhysicalClearance(curvedPath) &&
+                    HasSafeCurvedFallCorridors(curvedPath) &&
+                    HasSafeInternalCurvedFallCorridors(curvedPath) &&
+                    HasSafeCurvedSweepAgainstOtherLines(curvedPath))
                 {
-                    Debug.Log($"REJECT {shape}: Path creation");
+                    HashSet<Vector2Int> occupiedBefore =
+                        CaptureOccupiedCells();
+
+                    DominoLine curvedLine =
+                        CreateCurvedProceduralLine(
+                            curvedPath,
+                            lineIndex);
+
+                    if (curvedLine != null)
+                    {
+                        curvedAccepted =
+                            TryAcceptGeneratedLine(
+                                curvedLine,
+                                occupiedBefore);
+                    }
+                }
+
+                if (curvedAccepted)
+                {
+                    acceptedCurved++;
+                    consecutiveCurvedFailures = 0;
+
+                    lineIndex++;
+
+                    occupiedCells =
+                        board.GetOccupiedCells().Count;
+
                     continue;
                 }
 
-                if (!IsCurvedCandidateEndSafe(curvedPath))
-                {
-                    Debug.Log($"REJECT {shape}: End safety");
+                consecutiveCurvedFailures++;
+
+                // Do not immediately replace every failed
+                // curved attempt with a straight line.
+                if (!allowStraightFallback)
                     continue;
-                }
-
-                if (!HasEnoughCurvedPhysicalClearance(curvedPath))
-                {
-                    Debug.Log($"REJECT {shape}: Physical clearance");
-                    continue;
-                }
-
-                if (!HasSafeCurvedFallCorridors(curvedPath))
-                {
-                    Debug.Log($"REJECT {shape}: Fall corridors");
-                    continue;
-                }
-
-                if (!HasSafeInternalCurvedFallCorridors(curvedPath))
-                {
-                    Debug.Log($"REJECT {shape}: Internal fall corridors");
-                    continue;
-                }
-
-                if (!HasSafeCurvedSweepAgainstOtherLines(curvedPath))
-                {
-                    Debug.Log($"REJECT {shape}: Sweep against other lines");
-                    continue;
-                }
-
-                Debug.Log($"ACCEPTED {shape}: {curvedPath.positions.Count} dominoes");
-
-
-                HashSet<Vector2Int> curvedOccupiedBefore =
-    CaptureOccupiedCells();
-
-                DominoLine curvedLine =
-                    CreateCurvedProceduralLine(
-                        curvedPath,
-                        lineIndex);
-
-                if (curvedLine == null)
-                    continue;
-
-                if (!TryAcceptGeneratedLine(
-        curvedLine,
-        curvedOccupiedBefore))
-                {
-                    continue;
-                }
-
-                lineIndex++;
-
-                occupiedCells = board.GetOccupiedCells().Count;
-
-                continue;
             }
 
-            // =============================================
-            // ORIGINAL STRAIGHT GENERATION
-            // =============================================
+            // =====================================================
+            // INITIAL GENERATION: STRAIGHT PATH
+            // =====================================================
 
             LineDirection lineDirection =
                 GetRandomLineDirection();
 
             Vector2Int step =
-                GetDirectionStep(
-                    lineDirection);
+                GetDirectionStep(lineDirection);
 
             int desiredLength =
                 Random.Range(
@@ -2089,12 +2384,10 @@ public class ProceduralLevelGenerator : MonoBehaviour
             }
 
             if (!IsCandidateEndSafe(path))
-            {
                 continue;
-            }
 
-            HashSet<Vector2Int> occupiedBefore =
-    CaptureOccupiedCells();
+            HashSet<Vector2Int> straightOccupiedBefore =
+                CaptureOccupiedCells();
 
             DominoLine line =
                 CreateProceduralLine(
@@ -2104,18 +2397,43 @@ public class ProceduralLevelGenerator : MonoBehaviour
             if (line == null)
                 continue;
 
-            if (!TryAcceptGeneratedLine(line, occupiedBefore))
+            if (!TryAcceptGeneratedLine(
+                    line,
+                    straightOccupiedBefore))
+            {
                 continue;
+            }
+
+            acceptedStraight++;
+
+            // A successful straight line should not
+            // prevent future curved attempts.
+            consecutiveCurvedFailures = 0;
 
             lineIndex++;
-            occupiedCells = board.GetOccupiedCells().Count;
+
+            occupiedCells =
+                board.GetOccupiedCells().Count;
         }
 
+        // =====================================================
+        // FINAL REPORT
+        // =====================================================
 
-        occupiedCells = board.GetOccupiedCells().Count;
+        occupiedCells =
+            board.GetOccupiedCells().Count;
 
         float fillPercent =
-            100f * occupiedCells / Mathf.Max(1, totalCells);
+            100f * occupiedCells /
+            Mathf.Max(1, totalCells);
+
+        int totalAccepted =
+            acceptedCurved + acceptedStraight;
+
+        float actualCurvedPercent =
+            totalAccepted > 0
+                ? 100f * acceptedCurved / totalAccepted
+                : 0f;
 
         string stopReason =
             occupiedCells >= targetOccupiedCells
@@ -2135,7 +2453,15 @@ public class ProceduralLevelGenerator : MonoBehaviour
             $"Attempts={attempts}/{candidateLimit} | " +
             $"Stopped={stopReason}");
 
+        Debug.Log(
+            $"SHAPE DISTRIBUTION | " +
+            $"TargetCurved={targetCurvedRatio * 100f:F1}% | " +
+            $"ActualCurved={actualCurvedPercent:F1}% | " +
+            $"Curved={acceptedCurved} | " +
+            $"Straight={acceptedStraight} | " +
+            $"Total={totalAccepted}");
     }
+
 
 
 
@@ -2403,8 +2729,28 @@ public class ProceduralLevelGenerator : MonoBehaviour
                     $"Requested={desiredBlockers} | " +
                     $"Actual={actualBlockers}");
             }
+            if (requireRealBlocker)
+            {
+                if (candidate.name.StartsWith("Generated_Curve_"))
+                    acceptedGuidedCurves++;
+                else
+                    acceptedGuidedStraights++;
+            }
 
             return true;
+        }
+
+        if (!physicallyValid)
+        {
+            rejectedPhysical++;
+        }
+        else if (!structureValid)
+        {
+            rejectedStarterCount++;
+        }
+        else if (!blockerValid)
+        {
+            rejectedBlockerCount++;
         }
 
         // Reject only this candidate.
@@ -2449,7 +2795,19 @@ public class ProceduralLevelGenerator : MonoBehaviour
         // Restore dependency graph for accepted lines.
         blockingCalculator.CalculateBlocking(generatedLines);
 
+        if (logGenerationDiagnostics)
+        {
+            Debug.Log(
+                $"GENERATION DIAGNOSTICS | " +
+                $"RejectedPhysical={rejectedPhysical} | " +
+                $"RejectedStarters={rejectedStarterCount} | " +
+                $"RejectedBlockers={rejectedBlockerCount} | " +
+                $"AcceptedGuidedCurves={acceptedGuidedCurves} | " +
+                $"AcceptedGuidedStraights={acceptedGuidedStraights}");
+        }
+
         return false;
+
     }
 
 
@@ -4818,12 +5176,16 @@ public class ProceduralLevelGenerator : MonoBehaviour
         return true;
     }
 
+
     private bool TryGenerateGuidedCurvedBlockedLine(int lineIndex)
     {
         if (generatedLines.Count == 0 ||
             dominoPrefab == null ||
-            blockingCalculator == null)
+            blockingCalculator == null ||
+            board == null)
+        {
             return false;
+        }
 
         BoxCollider prefabBox =
             dominoPrefab.GetComponentInChildren<BoxCollider>();
@@ -4831,47 +5193,75 @@ public class ProceduralLevelGenerator : MonoBehaviour
         if (prefabBox == null)
             return false;
 
+        Vector3 scale = prefabBox.transform.lossyScale;
+
         Vector3 size = Vector3.Scale(
             prefabBox.size,
-            prefabBox.transform.lossyScale);
+            new Vector3(
+                Mathf.Abs(scale.x),
+                Mathf.Abs(scale.y),
+                Mathf.Abs(scale.z)));
 
         float reach =
-            Mathf.Abs(size.y) *
-            blockingCalculator.fallReachMultiplier;
+            size.y * blockingCalculator.fallReachMultiplier;
 
-        int requestedBlockers = ChooseTargetBlockerCount();
+        if (reach <= 0.001f)
+            return false;
 
+        int requestedBlockers =
+            ChooseTargetBlockerCount();
+
+        // Snapshot of occupancy before searching.
+        HashSet<Vector2Int> occupiedBeforeSearch =
+            CaptureOccupiedCells();
+
+        // Retain only the best curved candidates.
+        List<(CurvedPath path, PathShape shape, float score)>
+            curvedCandidates =
+                new List<(CurvedPath, PathShape, float)>();
+
+        int candidateLimit =
+            Mathf.Max(1, maxRankedCurvedCandidates);
+
+        // =============================================
+        // PHASE 1: GENERATE AND SCORE CURVED PATHS
+        // =============================================
 
         for (int attempt = 0;
              attempt < guidedBlockerAttempts &&
              !GenerationTimeExpired();
              attempt++)
         {
-            DominoLine blocker =
-                generatedLines[Random.Range(0, generatedLines.Count)];
-
-            if (blocker == null ||
-                blocker.dominoes == null ||
-                blocker.dominoes.Count == 0)
+            if (!TrySelectFreeSpaceBlocker(
+                    out DominoLine blocker,
+                    out Domino target))
+            {
                 continue;
-
-            Domino target =
-                blocker.dominoes[Random.Range(0, blocker.dominoes.Count)];
+            }
 
             if (target == null)
                 continue;
 
-            PathShape shape = GetRandomPathShape();
+            PathShape shape =
+                GetRandomPathShape();
 
             if (shape == PathShape.Straight)
                 continue;
 
-            CurvedPath source = TryCreateCurvedPath(shape);
+            CurvedPath source =
+                TryCreateCurvedPath(shape);
 
-            if (source == null || source.positions.Count < 2)
+            if (source == null ||
+                source.positions == null ||
+                source.directions == null ||
+                source.positions.Count < 2 ||
+                source.directions.Count != source.positions.Count)
+            {
                 continue;
+            }
 
-            int lastIndex = source.positions.Count - 1;
+            int lastIndex =
+                source.positions.Count - 1;
 
             Vector3 originalDirection =
                 source.positions[lastIndex] -
@@ -4887,38 +5277,56 @@ public class ProceduralLevelGenerator : MonoBehaviour
             LineDirection selectedDirection =
                 GetRandomLineDirection();
 
-            Vector2Int step = GetDirectionStep(selectedDirection);
+            Vector2Int step =
+                GetDirectionStep(selectedDirection);
 
             Vector3 forward =
-                new Vector3(step.x, 0f, step.y).normalized;
+                new Vector3(step.x, 0f, step.y);
 
             if (forward.sqrMagnitude < 0.0001f)
                 continue;
 
-            Quaternion rotation = Quaternion.FromToRotation(
-                originalDirection,
-                forward);
+            forward.Normalize();
 
+            Quaternion rotation =
+                Quaternion.FromToRotation(
+                    originalDirection,
+                    forward);
+
+            // Preserve the original end-domino
+            // blocker targeting behavior.
             Vector3 desiredEnd =
                 target.transform.position -
                 forward * reach;
 
-            desiredEnd.y = source.positions[lastIndex].y;
+            Vector3 sourceEnd =
+                source.positions[lastIndex];
 
-            Vector3 sourceEnd = source.positions[lastIndex];
+            desiredEnd.y = sourceEnd.y;
 
-            CurvedPath candidatePath = new CurvedPath();
-            HashSet<Vector2Int> usedCells = new HashSet<Vector2Int>();
+            CurvedPath candidatePath =
+                new CurvedPath();
+
+            HashSet<Vector2Int> usedCells =
+                new HashSet<Vector2Int>();
 
             bool valid = true;
 
-            for (int i = 0; i < source.positions.Count; i++)
+            // =========================================
+            // TRANSFORM THE COMPLETE CURVE
+            // =========================================
+
+            for (int i = 0;
+                 i < source.positions.Count;
+                 i++)
             {
                 Vector3 position =
                     desiredEnd +
-                    rotation * (source.positions[i] - sourceEnd);
+                    rotation *
+                    (source.positions[i] - sourceEnd);
 
-                Vector2Int cell = board.WorldToCell(position);
+                Vector2Int cell =
+                    board.WorldToCell(position);
 
                 if (!board.IsInside(cell))
                 {
@@ -4929,7 +5337,8 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 if (usedCells.Add(cell))
                 {
                     if (!IsCellClearFromOtherLines(
-                            cell, segmentGapCells))
+                            cell,
+                            segmentGapCells))
                     {
                         valid = false;
                         break;
@@ -4951,60 +5360,139 @@ public class ProceduralLevelGenerator : MonoBehaviour
                     break;
                 }
 
-                candidatePath.directions.Add(direction.normalized);
+                candidatePath.directions.Add(
+                    direction.normalized);
             }
 
             if (!valid)
                 continue;
 
-            if (!HasEnoughCurvedPhysicalClearance(candidatePath))
+            // =========================================
+            // PRESERVE CURVED PHYSICAL SAFETY CHECKS
+            // =========================================
+
+            if (!HasEnoughCurvedPhysicalClearance(
+                    candidatePath))
+            {
+                continue;
+            }
+
+            if (!HasSafeInternalCurvedFallCorridors(
+                    candidatePath))
+            {
+                continue;
+            }
+
+            // Do not reject intentional cross-line
+            // blocking contacts here.
+            //
+            // TryAcceptGeneratedLine will validate
+            // the actual dependencies and fall order.
+
+            // =========================================
+            // SCORE ACTUAL PATH COVERAGE
+            // =========================================
+
+            float score =
+                ScoreCandidatePathCoverage(
+                    candidatePath.occupiedCells,
+                    occupiedBeforeSearch);
+
+            if (score == float.MinValue)
                 continue;
 
-            if (!HasSafeInternalCurvedFallCorridors(candidatePath))
-                continue;
+            // Keep only the highest-scoring paths.
+            if (curvedCandidates.Count < candidateLimit)
+            {
+                curvedCandidates.Add(
+                    (candidatePath, shape, score));
+            }
+            else
+            {
+                int worstIndex = 0;
 
-            // Do not run cross-line fall corridor rejection here:
-            // the final domino must be allowed to hit its intended
-            // blocker. Existing partial-level validation remains
-            // responsible for physical safety and solvability.
+                for (int j = 1;
+                     j < curvedCandidates.Count;
+                     j++)
+                {
+                    if (curvedCandidates[j].score <
+                        curvedCandidates[worstIndex].score)
+                    {
+                        worstIndex = j;
+                    }
+                }
 
+                if (score >
+                    curvedCandidates[worstIndex].score)
+                {
+                    curvedCandidates[worstIndex] =
+                        (candidatePath, shape, score);
+                }
+            }
+        }
+
+        if (curvedCandidates.Count == 0)
+            return false;
+
+        // =============================================
+        // PHASE 2: TRY BEST CANDIDATES FIRST
+        // =============================================
+
+        curvedCandidates.Sort(
+            (a, b) => b.score.CompareTo(a.score));
+
+        for (int i = 0;
+             i < curvedCandidates.Count &&
+             !GenerationTimeExpired();
+             i++)
+        {
             HashSet<Vector2Int> occupiedBefore =
                 CaptureOccupiedCells();
 
             DominoLine candidate =
-                CreateCurvedProceduralLine(candidatePath, lineIndex);
+                CreateCurvedProceduralLine(
+                    curvedCandidates[i].path,
+                    lineIndex);
 
             if (candidate == null)
                 continue;
 
+            int desiredBlockers =
+                GetRequiredBlockersForAttempt(
+                    requestedBlockers,
+                    i);
 
-            int desiredBlockers = GetRequiredBlockersForAttempt(
-    requestedBlockers,
-    attempt);
-
-            if (TryAcceptGeneratedLine(
+            bool accepted =
+                TryAcceptGeneratedLine(
                     candidate,
                     occupiedBefore,
                     true,
-                    desiredBlockers))
+                    desiredBlockers);
 
+            if (!accepted)
+                continue;
+
+            if (logGuidedPlacement)
             {
-                if (logGuidedPlacement)
-                {
-                    Debug.Log(
-                        $"GUIDED CURVED ACCEPTED | Shape={shape} | " +
-                        $"Line={candidate.name}");
-                }
+                int blockerCount =
+                    candidate.blockedByLines != null
+                        ? candidate.blockedByLines.Count
+                        : 0;
 
-                return true;
+                Debug.Log(
+                    $"GUIDED CURVED COVERAGE ACCEPTED | " +
+                    $"Shape={curvedCandidates[i].shape} | " +
+                    $"Line={candidate.name} | " +
+                    $"Score={curvedCandidates[i].score:F1} | " +
+                    $"Blockers={blockerCount} | " +
+                    $"Candidates={curvedCandidates.Count}");
             }
+
+            return true;
         }
 
         return false;
     }
-
-
-
 
 
     private bool CanPlayableLineFallSafely(

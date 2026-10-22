@@ -6,14 +6,31 @@ public static class PuzzleDifficultyAnalyzer
 {
     public struct Result
     {
+        // General
         public int totalLines;
         public int initialPlayable;
         public int blockedLines;
         public int blockerLinks;
         public int multiBlockedLines;
-        public int maxDepth;
-        public float averageUnlocks;
         public bool solvable;
+
+        // Blocker statistics
+        public float averageBlockersPerBlockedLine;
+        public int maximumBlockersOnLine;
+
+        // Dependency depth
+        // maxDepth counts lines in the longest chain.
+        // maximumPrerequisiteSteps counts edges in that chain.
+        public int maxDepth;
+        public int maximumPrerequisiteSteps;
+        public float averagePrerequisiteSteps;
+
+        // Unlock statistics
+        public float averageUnlocks;
+        public float averageUnlocksAllMoves;
+        public int maximumUnlocksFromOneMove;
+        public int productiveMoves;
+        public int totalUnlocks;
     }
 
     public static Result Analyze(List<DominoLine> lines)
@@ -23,127 +40,225 @@ public static class PuzzleDifficultyAnalyzer
         if (lines == null || lines.Count == 0)
             return result;
 
-        HashSet<DominoLine> valid =
+        // =====================================================
+        // 1. COLLECT VALID, UNIQUE LINES
+        // =====================================================
+
+        List<DominoLine> valid =
+            new List<DominoLine>();
+
+        HashSet<DominoLine> validSet =
             new HashSet<DominoLine>();
 
-        foreach (var line in lines)
+        foreach (DominoLine line in lines)
         {
-            if (line != null)
+            if (line != null && validSet.Add(line))
                 valid.Add(line);
         }
 
         result.totalLines = valid.Count;
 
-        Dictionary<DominoLine, HashSet<DominoLine>> dependencies =
-            new Dictionary<DominoLine, HashSet<DominoLine>>();
+        if (valid.Count == 0)
+            return result;
 
-        foreach (var line in valid)
+        // =====================================================
+        // 2. BUILD DEPENDENCY GRAPH
+        // =====================================================
+
+        Dictionary<DominoLine, List<DominoLine>> dependents =
+            new Dictionary<DominoLine, List<DominoLine>>();
+
+        Dictionary<DominoLine, int> remainingBlockers =
+            new Dictionary<DominoLine, int>();
+
+        Dictionary<DominoLine, int> depths =
+            new Dictionary<DominoLine, int>();
+
+        foreach (DominoLine line in valid)
         {
-            var blockers = new HashSet<DominoLine>();
+            dependents[line] = new List<DominoLine>();
+            depths[line] = 1;
+        }
+
+        foreach (DominoLine line in valid)
+        {
+            HashSet<DominoLine> blockers =
+                new HashSet<DominoLine>();
 
             if (line.blockedByLines != null)
             {
-                foreach (var blocker in line.blockedByLines)
+                foreach (DominoLine blocker in line.blockedByLines)
                 {
-                    if (blocker != null &&
-                        blocker != line &&
-                        valid.Contains(blocker))
+                    if (blocker == null ||
+                        blocker == line ||
+                        !validSet.Contains(blocker))
                     {
-                        blockers.Add(blocker);
+                        continue;
                     }
+
+                    blockers.Add(blocker);
                 }
             }
 
-            dependencies[line] = blockers;
+            int blockerCount = blockers.Count;
 
-            result.blockerLinks += blockers.Count;
+            remainingBlockers[line] = blockerCount;
 
-            if (blockers.Count == 0)
+            result.blockerLinks += blockerCount;
+
+            result.maximumBlockersOnLine =
+                Mathf.Max(
+                    result.maximumBlockersOnLine,
+                    blockerCount);
+
+            if (blockerCount == 0)
+            {
                 result.initialPlayable++;
+            }
             else
+            {
                 result.blockedLines++;
 
-            if (blockers.Count >= 2)
-                result.multiBlockedLines++;
+                if (blockerCount >= 2)
+                    result.multiBlockedLines++;
+            }
+
+            foreach (DominoLine blocker in blockers)
+            {
+                dependents[blocker].Add(line);
+            }
         }
 
-        var completed = new HashSet<DominoLine>();
-        var depths = new Dictionary<DominoLine, int>();
+        // =====================================================
+        // 3. BLOCKER STATISTICS
+        // =====================================================
 
-        int totalNewUnlocks = 0;
-        int moves = 0;
-
-        // Simulate a deterministic valid topological order.
-        while (completed.Count < valid.Count)
-        {
-            var available = new List<DominoLine>();
-
-            foreach (var line in valid)
-            {
-                if (completed.Contains(line))
-                    continue;
-
-                if (completed.IsSupersetOf(dependencies[line]))
-                    available.Add(line);
-            }
-
-            if (available.Count == 0)
-            {
-                result.solvable = false;
-                return result;
-            }
-
-            // Choose a stable order based on input list.
-            DominoLine chosen = null;
-
-            foreach (var line in lines)
-            {
-                if (line != null && available.Contains(line))
-                {
-                    chosen = line;
-                    break;
-                }
-            }
-
-            int depth = 1;
-
-            foreach (var blocker in dependencies[chosen])
-            {
-                depth = Mathf.Max(
-                    depth, depths[blocker] + 1);
-            }
-
-            depths[chosen] = depth;
-            result.maxDepth = Mathf.Max(result.maxDepth, depth);
-
-            int availableBefore = available.Count;
-
-            completed.Add(chosen);
-            moves++;
-
-            int availableAfter = 0;
-
-            foreach (var line in valid)
-            {
-                if (!completed.Contains(line) &&
-                    completed.IsSupersetOf(dependencies[line]))
-                {
-                    availableAfter++;
-                }
-            }
-
-            int newlyUnlocked = Mathf.Max(
-                0, availableAfter - (availableBefore - 1));
-
-            totalNewUnlocks += newlyUnlocked;
-        }
-
-        result.averageUnlocks =
-            moves > 0
-                ? (float)totalNewUnlocks / moves
+        result.averageBlockersPerBlockedLine =
+            result.blockedLines > 0
+                ? (float)result.blockerLinks /
+                  result.blockedLines
                 : 0f;
 
-        result.solvable = true;
+        // =====================================================
+        // 4. FIND INITIAL PLAYABLE LINES
+        // =====================================================
+
+        Queue<DominoLine> ready =
+            new Queue<DominoLine>();
+
+        foreach (DominoLine line in valid)
+        {
+            if (remainingBlockers[line] == 0)
+                ready.Enqueue(line);
+        }
+
+        // =====================================================
+        // 5. SIMULATE A VALID UNLOCK ORDER
+        // =====================================================
+
+        int completedCount = 0;
+        int totalPrerequisiteSteps = 0;
+
+        while (ready.Count > 0)
+        {
+            DominoLine chosen = ready.Dequeue();
+
+            completedCount++;
+
+            int newlyUnlocked = 0;
+
+            foreach (DominoLine dependent in dependents[chosen])
+            {
+                remainingBlockers[dependent]--;
+
+                int nextDepth =
+                    depths[chosen] + 1;
+
+                depths[dependent] =
+                    Mathf.Max(
+                        depths[dependent],
+                        nextDepth);
+
+                if (remainingBlockers[dependent] == 0)
+                {
+                    ready.Enqueue(dependent);
+                    newlyUnlocked++;
+                }
+            }
+
+            // Longest dependency chain
+            result.maxDepth =
+                Mathf.Max(
+                    result.maxDepth,
+                    depths[chosen]);
+
+            totalPrerequisiteSteps +=
+                Mathf.Max(0, depths[chosen] - 1);
+
+            // Newly playable lines after this move
+            result.totalUnlocks += newlyUnlocked;
+
+            result.maximumUnlocksFromOneMove =
+                Mathf.Max(
+                    result.maximumUnlocksFromOneMove,
+                    newlyUnlocked);
+
+            if (newlyUnlocked > 0)
+                result.productiveMoves++;
+        }
+
+        // =====================================================
+        // 6. SOLVABILITY
+        // =====================================================
+
+        result.solvable =
+            completedCount == valid.Count;
+
+        if (!result.solvable)
+        {
+            // These values are undefined for a graph
+            // that cannot be completely resolved.
+            result.averageUnlocks = 0f;
+            result.averageUnlocksAllMoves = 0f;
+            result.averagePrerequisiteSteps = 0f;
+            result.maximumPrerequisiteSteps = 0;
+
+            return result;
+        }
+
+        // =====================================================
+        // 7. DEPENDENCY DEPTH STATISTICS
+        // =====================================================
+
+        result.maximumPrerequisiteSteps =
+            Mathf.Max(0, result.maxDepth - 1);
+
+        result.averagePrerequisiteSteps =
+            result.totalLines > 0
+                ? (float)totalPrerequisiteSteps /
+                  result.totalLines
+                : 0f;
+
+        // =====================================================
+        // 8. UNLOCK STATISTICS
+        // =====================================================
+
+        // Average newly unlocked lines among moves
+        // that unlock at least one line.
+        result.averageUnlocks =
+            result.productiveMoves > 0
+                ? (float)result.totalUnlocks /
+                  result.productiveMoves
+                : 0f;
+
+        // Average newly unlocked lines across ALL moves,
+        // including moves that unlock nothing.
+        result.averageUnlocksAllMoves =
+            result.totalLines > 0
+                ? (float)result.totalUnlocks /
+                  result.totalLines
+                : 0f;
+
         return result;
     }
 }

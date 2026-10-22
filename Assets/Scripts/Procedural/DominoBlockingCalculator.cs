@@ -100,6 +100,66 @@ public class DominoBlockingCalculator : MonoBehaviour
 
 
 
+    private bool IsStandingLineCloseEnough(
+        Domino fallingDomino,
+        DominoLine standingLine)
+    {
+        if (fallingDomino == null ||
+            standingLine == null ||
+            standingLine.dominoes == null)
+            return false;
+
+        BoxCollider fallingBox =
+            fallingDomino.GetComponentInChildren<BoxCollider>();
+
+        if (fallingBox == null)
+            return true; // Let the existing collision logic decide.
+
+        Vector3 scale = fallingBox.transform.lossyScale;
+
+        Vector3 size = Vector3.Scale(
+            fallingBox.size,
+            new Vector3(
+                Mathf.Abs(scale.x),
+                Mathf.Abs(scale.y),
+                Mathf.Abs(scale.z)));
+
+        float height = size.y;
+
+        // Deliberately generous distance to avoid
+        // rejecting real blockers.
+        float searchRadius =
+            height * (Mathf.Max(1f, fallDistanceMultiplier) + 2f)
+            + Mathf.Max(size.x, size.z)
+            + fallSweepPadding * 2f;
+
+        Vector3 center =
+            fallingBox.transform.TransformPoint(
+                fallingBox.center);
+
+        foreach (Domino other in standingLine.dominoes)
+        {
+            if (other == null)
+                continue;
+
+            BoxCollider otherBox =
+                other.GetComponentInChildren<BoxCollider>();
+
+            if (otherBox == null)
+                return true;
+
+            if (otherBox.bounds.SqrDistance(center)
+                <= searchRadius * searchRadius)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
+
     private bool DoesAnyDominoPhysicallyHitLine(
         DominoLine fallingLine,
         DominoLine standingLine)
@@ -123,6 +183,13 @@ public class DominoBlockingCalculator : MonoBehaviour
 
             if (domino == null)
                 continue;
+
+            if (!IsStandingLineCloseEnough(
+        domino,
+        standingLine))
+            {
+                continue;
+            }
 
             Vector3 direction;
 
