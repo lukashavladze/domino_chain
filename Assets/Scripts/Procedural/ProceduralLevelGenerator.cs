@@ -1906,7 +1906,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
         // =================================================
         if (level <= 100)
         {
-            targetBoardFill = 0.15f;
+            targetBoardFill = 0.25f;
         }
         else
         {
@@ -1959,7 +1959,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
         // =================================================
         if (level <= 10)
         {
-            curvedLineChance = 0f;
+            curvedLineChance = 20f;
         }
         else
         {
@@ -2199,30 +2199,29 @@ public class ProceduralLevelGenerator : MonoBehaviour
     {
         int level = Mathf.Max(1, levelNumber);
 
-        // First 200 levels use the starting size.
-        if (level <= 200)
-            return startingGroundSize;
+        int increaseInterval =
+            Mathf.Max(1, levelsPerSizeIncrease);
 
-        // Increase every 100 levels after level 200.
-        int step = 1 + (level - 201) / 100;
+        int steps =
+            (level - 1) / increaseInterval;
 
         float width =
             startingGroundSize.x +
-            step * sizeIncreasePerStep.x;
+            steps * sizeIncreasePerStep.x;
 
         float depth =
             startingGroundSize.y +
-            step * sizeIncreasePerStep.y;
+            steps * sizeIncreasePerStep.y;
 
-        width = Mathf.Min(
+        width = Mathf.Clamp(
             width,
-            maximumGroundSize.x
-        );
+            startingGroundSize.x,
+            maximumGroundSize.x);
 
-        depth = Mathf.Min(
+        depth = Mathf.Clamp(
             depth,
-            maximumGroundSize.y
-        );
+            startingGroundSize.y,
+            maximumGroundSize.y);
 
         return new Vector2(width, depth);
     }
@@ -2235,42 +2234,38 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
     private int CalculateColumns()
     {
-        Vector2 groundSize =
-            CalculateGroundSize();
+        if (groundRenderer == null)
+            return 2;
 
-        float usableWidth =
-            Mathf.Max(
-                cellSize,
-                groundSize.x -
-                boardEdgeMargin * 2f
-            );
+        float width = groundRenderer.bounds.size.x;
+
+        float usableWidth = Mathf.Max(
+            cellSize,
+            width - boardEdgeMargin * 2f
+        );
 
         return Mathf.Max(
             2,
-            Mathf.FloorToInt(
-                usableWidth / cellSize
-            ) + 1
+            Mathf.FloorToInt(usableWidth / cellSize) + 1
         );
     }
 
 
     private int CalculateRows()
     {
-        Vector2 groundSize =
-            CalculateGroundSize();
+        if (groundRenderer == null)
+            return 2;
 
-        float usableDepth =
-            Mathf.Max(
-                cellSize,
-                groundSize.y -
-                boardEdgeMargin * 2f
-            );
+        float depth = groundRenderer.bounds.size.z;
+
+        float usableDepth = Mathf.Max(
+            cellSize,
+            depth - boardEdgeMargin * 2f
+        );
 
         return Mathf.Max(
             2,
-            Mathf.FloorToInt(
-                usableDepth / cellSize
-            ) + 1
+            Mathf.FloorToInt(usableDepth / cellSize) + 1
         );
     }
 
