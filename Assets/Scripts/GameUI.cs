@@ -2,6 +2,7 @@ using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 
 public class GameUI : MonoBehaviour
 {
@@ -29,6 +30,8 @@ public class GameUI : MonoBehaviour
     [SerializeField] private RectTransform levelCompletePopup;
 
     private Coroutine levelCompleteCoroutine;
+
+    [SerializeField] private VictoryGoldenRays victoryGoldenRays;
 
     [SerializeField] private ParticleSystem levelCompleteSparkles;
 
@@ -83,6 +86,31 @@ public class GameUI : MonoBehaviour
             gameOverRect.localScale;
     }
 
+
+    private void Update()
+    {
+#if UNITY_EDITOR
+        if (Keyboard.current == null)
+            return;
+
+        // F8 - Show Level Complete animation
+        if (Keyboard.current.f8Key.wasPressedThisFrame)
+        {
+            Debug.Log("TEST: Showing Level Complete");
+            ShowLevelComplete();
+        }
+
+        // F9 - Hide Level Complete animation
+        if (Keyboard.current.f9Key.wasPressedThisFrame)
+        {
+            Debug.Log("TEST: Hiding Level Complete");
+            HideLevelComplete();
+        }
+#endif
+    }
+
+
+
     public void ShowLevelComplete()
     {
         if (levelCompletePanel == null ||
@@ -90,15 +118,24 @@ public class GameUI : MonoBehaviour
             return;
 
         if (levelCompleteCoroutine != null)
+        {
             StopCoroutine(levelCompleteCoroutine);
+            levelCompleteCoroutine = null;
+        }
 
         levelCompletePanel.SetActive(true);
+
+        // GoldenRays automatically plays in OnEnable()
+        // when the panel is activated.
 
         levelCompleteCoroutine =
             StartCoroutine(AnimateLevelComplete());
 
         StartCoroutine(PlayLevelCompleteParticles());
     }
+
+
+
 
     private IEnumerator PlayLevelCompleteParticles()
     {
