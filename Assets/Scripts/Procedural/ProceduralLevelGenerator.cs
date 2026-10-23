@@ -276,7 +276,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
         new Vector2(6f, 4f);
 
     public Vector2 maximumGroundSize =
-        new Vector2(11f, 7f);
+        new Vector2(18f, 12f);
 
     [Min(1)]
     public int levelsPerSizeIncrease = 5;

@@ -16,6 +16,17 @@ public class GameManager : MonoBehaviour
     private int maximumLives = 3;
 
 
+    [Header("Level Completion Animation")]
+    [SerializeField] private Transform boardRoot;
+
+    [SerializeField] private float completionRotationY = 45f;
+    [SerializeField] private float completionRotationDuration = 1f;
+
+    private bool completionSequenceStarted;
+
+    private Quaternion originalBoardRotation;
+
+
     // =========================================================
     // REFERENCES
     // =========================================================
@@ -84,6 +95,10 @@ public class GameManager : MonoBehaviour
         }
 
         Instance = this;
+        if (boardRoot != null)
+        {
+            originalBoardRotation = boardRoot.localRotation;
+        }
 
         LoadSavedLevel();
     }
@@ -116,6 +131,85 @@ public class GameManager : MonoBehaviour
 
 #endif
     }
+
+
+    private IEnumerator RotateBoardForCompletion()
+    {
+        if (boardRoot == null)
+            yield break;
+
+        Quaternion startRotation = boardRoot.localRotation;
+
+        Quaternion targetRotation = Quaternion.Euler(
+            boardRoot.localEulerAngles.x,
+            completionRotationY,
+            boardRoot.localEulerAngles.z
+        );
+
+        float elapsed = 0f;
+
+        while (elapsed < completionRotationDuration)
+        {
+            elapsed += Time.deltaTime;
+
+            float t = Mathf.Clamp01(
+                elapsed / Mathf.Max(0.01f, completionRotationDuration)
+            );
+
+            // Smoothstep easing.
+            t = t * t * (3f - 2f * t);
+
+            boardRoot.localRotation =
+                Quaternion.Slerp(startRotation, targetRotation, t);
+
+            yield return null;
+        }
+
+        boardRoot.localRotation = targetRotation;
+    }
+
+
+    private IEnumerator WaitForAllDominoesToFade()
+    {
+        Domino[] dominoes =
+            FindObjectsByType<Domino>(
+                FindObjectsSortMode.None
+            );
+
+        if (dominoes.Length == 0)
+        {
+            Debug.LogWarning(
+                "COMPLETION: No dominoes found.");
+            yield break;
+        }
+
+        while (true)
+        {
+            bool allFinished = true;
+
+            foreach (Domino domino in dominoes)
+            {
+                if (domino == null)
+                    continue;
+
+                if (!domino.HasFinishedFading)
+                {
+                    allFinished = false;
+                    break;
+                }
+            }
+
+            if (allFinished)
+            {
+                Debug.Log(
+                    "COMPLETION: All dominoes faded.");
+                yield break;
+            }
+
+            yield return null;
+        }
+    }
+
 
 
     // =========================================================
@@ -254,42 +348,57 @@ public class GameManager : MonoBehaviour
     // START / RESET LEVEL STATE
     // =========================================================
 
+
     private void StartLevel()
     {
-        currentLives =
-            maximumLives;
+        // =====================================================
+        // RESET GAME STATE
+        // =====================================================
+
+        currentLives = maximumLives;
 
         gameOver = false;
-
         continueUsed = false;
-
         levelCompleted = false;
 
+        // =====================================================
+        // STOP PREVIOUS COMPLETION ANIMATION
+        // =====================================================
 
         if (completionCoroutine != null)
         {
-            StopCoroutine(
-                completionCoroutine
-            );
-
+            StopCoroutine(completionCoroutine);
             completionCoroutine = null;
         }
 
+        completionSequenceStarted = false;
+
+        // =====================================================
+        // RESTORE ORIGINAL BOARD ROTATION
+        // =====================================================
+
+        if (boardRoot != null)
+        {
+            boardRoot.localRotation = originalBoardRotation;
+        }
+
+        // =====================================================
+        // RESET UI
+        // =====================================================
 
         if (gameUI != null)
         {
-            gameUI.SetLives(
-                currentLives
-            );
+            gameUI.SetLives(currentLives);
 
             gameUI.HideGameOver();
             gameUI.HideLevelComplete();
 
-            gameUI.SetLevel(
-                currentLevel
-            );
+            gameUI.SetLevel(currentLevel);
         }
+
+        Debug.Log($"LEVEL {currentLevel}: State and board rotation reset.");
     }
+
 
 
     // =========================================================
@@ -346,34 +455,44 @@ public class GameManager : MonoBehaviour
     // LEVEL COMPLETE SEQUENCE
     // =========================================================
 
+
     private IEnumerator LevelCompleteSequence()
     {
-        Debug.Log(
-            $"LEVEL {currentLevel} COMPLETED"
+        if (completionSequenceStarted)
+            yield break;
+
+        completionSequenceStarted = true;
+
+        Debug.Log($"LEVEL {currentLevel} COMPLETED");
+
+        // 1. Wait for ALL dominoes to disappear.
+        Debug.Log("COMPLETION: Waiting for dominoes");
+
+        yield return StartCoroutine(
+            WaitForAllDominoesToFade()
         );
 
+        // 2. Rotate board to the final viewing angle.
+        Debug.Log("COMPLETION: Rotating board");
 
-        // Give the final dominoes time
-        // to finish falling.
-        yield return new WaitForSeconds(
-            2.0f
+        yield return StartCoroutine(
+            RotateBoardForCompletion()
         );
 
+        // 3. Play green radial reveal AFTER rotation.
+        Debug.Log("COMPLETION: Starting radial reveal");
 
-        // Final radial reveal.
         if (RevealPainter.Instance != null)
         {
             yield return StartCoroutine(
-                RevealPainter.Instance
-                    .RevealAllRadial()
+                RevealPainter.Instance.RevealAllRadial()
             );
         }
 
-
-        // Let player see the completed picture.
+        // 4. Let the player enjoy the revealed picture.
         yield return new WaitForSeconds(0.5f);
 
-        // Show victory popup.
+        // 5. Show level completion popup.
         if (gameUI != null)
         {
             gameUI.ShowLevelComplete();
@@ -381,6 +500,7 @@ public class GameManager : MonoBehaviour
 
         completionCoroutine = null;
     }
+
 
 
     public void OnNextLevelPressed()
@@ -431,6 +551,11 @@ public class GameManager : MonoBehaviour
         //
         // We don't save progress until we know
         // the next prefab actually exists.
+        // Restore original rotation BEFORE loading next level.
+        if (boardRoot != null)
+        {
+            boardRoot.localRotation = originalBoardRotation;
+        }
         bool loaded =
             LevelLoader.Instance.LoadLevel(
                 nextLevel

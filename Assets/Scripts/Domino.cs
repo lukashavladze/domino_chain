@@ -50,6 +50,8 @@ public class Domino : MonoBehaviour
     public bool HasStarted => hasStarted;
     public bool IsFading { get; private set; }
 
+    public bool HasFinishedFading { get; private set; }
+
 
     private void Awake()
     {
@@ -63,6 +65,7 @@ public class Domino : MonoBehaviour
         // Standing dominoes must never be knocked down
         // by physics from another line.
         rb.isKinematic = true;
+        HasFinishedFading = false;
 
         if (!rb.isKinematic)
         {
@@ -382,12 +385,16 @@ public class Domino : MonoBehaviour
         transform.localScale = Vector3.zero;
         transform.position = endPosition;
 
-        rb.isKinematic = true;
-        if (rb != null && !rb.isKinematic)
+        if (rb != null)
         {
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
+            rb.isKinematic = true;
         }
+
+        // IMPORTANT:
+        // Mark fading as completed only after
+        // the domino is fully invisible.
+        HasFinishedFading = true;
+        IsFading = false;
     }
 
     public void ResetDomino()
@@ -395,6 +402,7 @@ public class Domino : MonoBehaviour
         StopAllCoroutines();
         CancelInvoke();
 
+        HasFinishedFading = false;
         hasStarted = false;
         fadeScheduled = false;
         nextActivated = false;
