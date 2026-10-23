@@ -4420,9 +4420,11 @@ MonoBehaviour:
   banner: {fileID: 1402502599}
   canvasGroup: {fileID: 1402502602}
   appearDelay: 0.15
-  duration: 0.65
-  startScale: 0.65
+  duration: 0.7
+  startScale: 3
   overshootScale: 1.5
+  endScale: 2
+  victoryBurst: {fileID: 6115984725198768813, guid: 3c1f794f8b8627346a3680e3ce599eb1, type: 3}
 --- !u!1 &1440420515
 GameObject:
   m_ObjectHideFlags: 0
