@@ -26,7 +26,8 @@ public class ProceduralLevelGenerator : MonoBehaviour
         Circle,
         SCurve,
         UShape,
-        StraightHalfCircle
+        StraightHalfCircle,
+        Spiral
 
     }
 
@@ -396,6 +397,31 @@ public class ProceduralLevelGenerator : MonoBehaviour
     [Min(10)]
     [SerializeField]
     private int maxLineGenerationAttempts = 500;
+
+    [Header("Advanced Curved Shapes")]
+
+    [SerializeField]
+    private bool allowSpiralLines = true;
+
+    [SerializeField, Min(2)]
+    private int minimumSCurveDominoes = 20;
+
+    [SerializeField, Min(2)]
+    private int minimumUShapeDominoes = 20;
+
+    [SerializeField, Min(3)]
+    private int minimumSpiralDominoes = 30;
+
+    [SerializeField, Range(10f, 180f)]
+    private float minimumShapeTurnDegrees = 40f;
+
+    [Header("Curve First Generation")]
+
+    [SerializeField]
+    private bool generateCurvesFirst = true;
+
+    [SerializeField, Range(1, 500)]
+    private int curveFirstAttemptBudget = 120;
 
     [Tooltip("Allow horizontal lines.")]
     [SerializeField]
@@ -2359,7 +2385,8 @@ public class ProceduralLevelGenerator : MonoBehaviour
             allowCircleLines ||
             allowSCurveLines ||
             allowUShapeLines ||
-            allowStraightHalfCircleLines;
+            allowStraightHalfCircleLines ||
+            allowSpiralLines;
 
         float targetCurvedRatio =
             curvedShapesEnabled
@@ -2381,43 +2408,49 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 acceptedStraight++;
         }
 
-        // Avoid endlessly attempting curves when placement is difficult.
         const int curvedFailureFallbackThreshold = 4;
         int consecutiveCurvedFailures = 0;
+        int curvePhaseAttempts = 0;
+        bool curvePhaseComplete = !generateCurvesFirst || !curvedShapesEnabled || targetCurvedRatio <= 0f;
 
-        while (
-            occupiedCells < targetOccupiedCells &&
-            attempts < candidateLimit &&
-            !GenerationTimeExpired())
+        // Reserve attempts for straight-line filling.
+        int curvedBudget = Mathf.Min(
+            Mathf.Max(0, curveFirstAttemptBudget),
+            Mathf.Max(0, candidateLimit - Mathf.Max(10, candidateLimit / 3)));
+
+        while (occupiedCells < targetOccupiedCells &&
+               attempts < candidateLimit &&
+               !GenerationTimeExpired())
         {
             attempts++;
 
-            int acceptedTotal =
-                acceptedCurved + acceptedStraight;
+            int acceptedTotal = acceptedCurved + acceptedStraight;
+            float curvedDeficit = targetCurvedRatio * (acceptedTotal + 1) - acceptedCurved;
 
-            // Compare the number of curved lines against
-            // the desired number after the NEXT acceptance.
-            float curvedDeficit =
-                targetCurvedRatio * (acceptedTotal + 1)
-                - acceptedCurved;
+            bool preferCurved;
+            if (generateCurvesFirst)
+            {
+                preferCurved = !curvePhaseComplete;
+                if (preferCurved)
+                {
+                    curvePhaseAttempts++;
+                    // Current attempt is the last curved attempt when the budget is reached.
+                    if (curvePhaseAttempts >= curvedBudget)
+                        curvePhaseComplete = true;
+                }
+            }
+            else
+            {
+                preferCurved = curvedShapesEnabled && targetCurvedRatio > 0f &&
+                    (curvedDeficit >= 0.5f ||
+                     (curvedDeficit > 0f && Random.value < curvedDeficit));
+            }
 
-            bool preferCurved =
-                curvedShapesEnabled &&
-                targetCurvedRatio > 0f &&
-                (
-                    curvedDeficit >= 0.5f ||
-                    (
-                        curvedDeficit > 0f &&
-                        Random.value < curvedDeficit
-                    )
-                );
-
-            // Every few failed curved attempts, allow one
-            // straight attempt to keep generation progressing.
-            bool allowStraightFallback =
-                !preferCurved ||
-                consecutiveCurvedFailures >=
-                    curvedFailureFallbackThreshold;
+            // Strict phases: never place a straight during the curved phase.
+            bool allowStraightFallback = generateCurvesFirst
+                ? false
+                : !preferCurved ||
+                  consecutiveCurvedFailures >= curvedFailureFallbackThreshold;
 
             // =====================================================
             // BLOCKER-AWARE GUIDED GENERATION
@@ -2671,10 +2704,38 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
     }
 
+    // Add these helpers only if they do not already exist in your class.
+    private float CalculateTotalTurningDegrees(List<Vector3> positions)
+    {
+        if (positions == null || positions.Count < 3) return 0f;
+        float total = 0f;
+        for (int i = 1; i < positions.Count - 1; i++)
+        {
+            Vector3 a = positions[i] - positions[i - 1];
+            Vector3 b = positions[i + 1] - positions[i];
+            a.y = 0f;
+            b.y = 0f;
+            if (a.sqrMagnitude > 0.000001f && b.sqrMagnitude > 0.000001f)
+                total += Vector3.Angle(a, b);
+        }
+        return total;
+    }
 
-
-
-
+    private List<Vector3> CreateSpiral(Vector3 center, float startRadius,
+        float endRadius, float turns, float spacing)
+    {
+        var points = new List<Vector3>();
+        int steps = Mathf.Max(200, Mathf.CeilToInt(turns * 180f));
+        for (int i = 0; i <= steps; i++)
+        {
+            float t = i / (float)steps;
+            float angle = t * turns * Mathf.PI * 2f;
+            float radius = Mathf.Lerp(startRadius, endRadius, t);
+            points.Add(center + new Vector3(Mathf.Cos(angle) * radius,
+                0f, Mathf.Sin(angle) * radius));
+        }
+        return SamplePath(points, spacing);
+    }
 
     private float DistancePointToSegmentXZ(
     Vector3 point,
@@ -3130,6 +3191,12 @@ public class ProceduralLevelGenerator : MonoBehaviour
         if (level >= 60 && allowStraightHalfCircleLines)
             available.Add(PathShape.StraightHalfCircle);
 
+        // Level 70: Spiral
+        if (level >= 1 && allowSpiralLines)
+        {
+            available.Add(PathShape.Spiral);
+        }
+
         if (available.Count == 0)
             return PathShape.Straight;
 
@@ -3162,7 +3229,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
 
         // Try several different positions and rotations
         // before giving up on the shape.
-        const int maxAttempts = 30;
+        const int maxAttempts = 60;
 
         float spacing = Mathf.Max(0.05f, dominoSpacing);
         float minDistance = spacing * 0.98f;
@@ -3201,7 +3268,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
                     rawPositions = CreateSCurve(
                         start,
                         forward,
-                        Random.Range(1.8f, 2.6f),
+                        Random.Range(Mathf.Max(2.0f, (minimumSCurveDominoes - 1) * spacing * 0.85f), Mathf.Max(2.5f, (minimumSCurveDominoes - 1) * spacing * 1.15f)),
                         Random.Range(0.8f, 1.4f),
                         spacing * 0.25f
                     );
@@ -3211,8 +3278,8 @@ public class ProceduralLevelGenerator : MonoBehaviour
                     rawPositions = CreateUShape(
                         start,
                         forward,
-                        Random.Range(0.8f, 1.3f),
-                        Random.Range(0.45f, 0.75f),
+                        Random.Range(1.0f, 1.8f),
+                        Random.Range(0.65f, 1.05f),
                         spacing * 0.25f
                     );
                     break;
@@ -3225,6 +3292,15 @@ public class ProceduralLevelGenerator : MonoBehaviour
                         1.0f,
                         spacing * 0.25f
                     );
+                    break;
+
+                case PathShape.Spiral:
+                    rawPositions = CreateSpiral(
+                        start,
+                        spacing * 3f,
+                        spacing * 11f,
+                        1.25f,
+                        spacing * 0.20f);
                     break;
 
                 default:
@@ -3335,14 +3411,38 @@ public class ProceduralLevelGenerator : MonoBehaviour
                 }
             }
 
-            if (positions.Count < minDominoesPerLine)
+            int requiredCount = minDominoesPerLine;
+
+            switch (shape)
+            {
+                case PathShape.SCurve:
+                    requiredCount = Mathf.Max(
+                        requiredCount, minimumSCurveDominoes);
+                    break;
+
+                case PathShape.UShape:
+                    requiredCount = Mathf.Max(
+                        requiredCount, minimumUShapeDominoes);
+                    break;
+
+                case PathShape.Spiral:
+                    requiredCount = Mathf.Max(
+                        requiredCount, minimumSpiralDominoes);
+                    break;
+            }
+
+            if (positions.Count < requiredCount)
             {
                 if (logRejections)
-                    Debug.Log(
-                        $"COMPOUND {shape}: Too few dominoes " +
-                        $"{positions.Count}/{minDominoesPerLine}"
-                    );
+                    Debug.Log($"COMPOUND {shape}: Too few dominoes {positions.Count}/{requiredCount}");
+                continue;
+            }
 
+            if ((shape == PathShape.SCurve || shape == PathShape.UShape) &&
+                CalculateTotalTurningDegrees(positions) < minimumShapeTurnDegrees)
+            {
+                if (logRejections)
+                    Debug.Log($"COMPOUND {shape}: Insufficient turn");
                 continue;
             }
 
@@ -3515,6 +3615,7 @@ public class ProceduralLevelGenerator : MonoBehaviour
         return null;
     }
 
+
     private CurvedPath TryCreateCurvedPath(
     PathShape shape)
     {
@@ -3522,7 +3623,8 @@ public class ProceduralLevelGenerator : MonoBehaviour
         // Handle the two new shapes separately.
         if (shape == PathShape.SCurve ||
     shape == PathShape.UShape ||
-    shape == PathShape.StraightHalfCircle)
+    shape == PathShape.StraightHalfCircle ||
+    shape == PathShape.Spiral)
         {
             return TryCreateCompoundPath(shape);
         }
